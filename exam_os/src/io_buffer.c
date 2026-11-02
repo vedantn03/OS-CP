@@ -5,6 +5,8 @@
 #include <time.h>
 #include "io_buffer.h"
 #include "logger.h"
+#include "clock.h"
+#include "rng.h"
 
 #define FLUSH_THRESHOLD 0.80  // flush when 80% full
 
@@ -12,19 +14,20 @@ static FILE *disk_file   = NULL;
 static int   io_running  = 1;
 
 // ─── Timestamp ────────────────────────────────────────────
-static long now_ms() {
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return ts.tv_sec * 1000L + ts.tv_nsec / 1000000L;
-}
-
 // ─── Init ─────────────────────────────────────────────────
 void io_buffer_init() {
+    g_io_buffer.capacity = g_config.buffer_capacity;
+    g_io_buffer.buffer = calloc((size_t)g_io_buffer.capacity, sizeof(*g_io_buffer.buffer));
+    if (!g_io_buffer.buffer) {
+        fprintf(stderr, "ERROR: Could not allocate I/O buffer (%d entries)\n",
+                g_io_buffer.capacity);
+        exit(EXIT_FAILURE);
+    }
     g_io_buffer.head  = 0;
     g_io_buffer.tail  = 0;
     g_io_buffer.count = 0;
 
-    sem_init(&g_io_buffer.empty_slots, 0, BUFFER_CAPACITY);
+    sem_init(&g_io_buffer.empty_slots, 0, (unsigned int)g_io_buffer.capacity);
     sem_init(&g_io_buffer.filled_slots, 0, 0);
     pthread_mutex_init(&g_io_buffer.lock, NULL);
 
@@ -66,11 +69,11 @@ int io_buffer_submit(int pid, int question_id,
     Submission *s   = &g_io_buffer.buffer[g_io_buffer.tail];
     s->pid          = pid;
     s->question_id  = question_id;
-    s->timestamp    = now_ms();
+    s->timestamp    = (long)clock_now_ms();
     s->is_partial   = is_partial;
     strncpy(s->answer, answer ? answer : "EMPTY", sizeof(s->answer) - 1);
 
-    g_io_buffer.tail  = (g_io_buffer.tail + 1) % BUFFER_CAPACITY;
+    g_io_buffer.tail  = (g_io_buffer.tail + 1) % g_io_buffer.capacity;
     g_io_buffer.count++;
 
     // Update shared state for dashboard
@@ -105,7 +108,7 @@ static int flush_buffer() {
 
         pthread_mutex_lock(&g_io_buffer.lock);
         Submission s = g_io_buffer.buffer[g_io_buffer.head];
-        g_io_buffer.head  = (g_io_buffer.head + 1) % BUFFER_CAPACITY;
+        g_io_buffer.head  = (g_io_buffer.head + 1) % g_io_buffer.capacity;
         g_io_buffer.count--;
 
         pthread_mutex_lock(&g_state.lock);
@@ -149,14 +152,15 @@ static void trigger_submission_storm() {
     int storms = count < 30 ? count : 30;
     for (int i = 0; i < storms; i++) {
         char answer[64];
-        snprintf(answer, sizeof(answer), "ANS_%d_%d", i, rand() % 100);
-        io_buffer_submit(i + 1, rand() % 10 + 1, answer, 0);
+        snprintf(answer, sizeof(answer), "ANS_%d_%d", i, rng_uniform(100));
+        io_buffer_submit(i + 1, rng_uniform(10) + 1, answer, 0);
     }
 }
 
 // ─── I/O flusher thread ───────────────────────────────────
 void *io_buffer_thread(void *arg) {
     (void)arg;
+    rng_seed_thread(3u ^ g_config.random_seed);
     log_event("INFO", "IO", "I/O buffer thread started");
 
     int storm_triggered = 0;
@@ -188,16 +192,16 @@ void *io_buffer_thread(void *arg) {
 
         if (pid > 0 && prcount > 0) {
             // 30% chance a process submits an answer each tick
-            if (rand() % 100 < 30) {
+            if (rng_uniform(100) < 30) {
                 char answer[64];
-                snprintf(answer, sizeof(answer), "ANS_%d", rand() % 1000);
-                io_buffer_submit(pid, rand() % 10 + 1, answer, 0);
+                snprintf(answer, sizeof(answer), "ANS_%d", rng_uniform(1000));
+                io_buffer_submit(pid, rng_uniform(10) + 1, answer, 0);
             }
         }
 
         // Flush if above threshold or every 15 ticks
         pthread_mutex_lock(&g_io_buffer.lock);
-        float fill = (float)g_io_buffer.count / BUFFER_CAPACITY;
+        float fill = (float)g_io_buffer.count / g_io_buffer.capacity;
         pthread_mutex_unlock(&g_io_buffer.lock);
 
         if (fill >= FLUSH_THRESHOLD || tick % 15 == 0)

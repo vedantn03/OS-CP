@@ -9,7 +9,8 @@
 #define MAX_STUDENTS     200
 #define MAX_FRAMES       256
 #define MAX_PAGES        64
-#define BUFFER_CAPACITY  256
+#define DEFAULT_BUFFER_CAPACITY 256
+#define MAX_BUFFER_CAPACITY     4096
 #define MAX_LOG_QUEUE    512
 #define MAX_INTERRUPTS   8
 #define TIME_TICK_MS     100
@@ -77,6 +78,8 @@ typedef struct {
     PageAlgo  page_algo;
     int       buffer_capacity;
     int       demo_mode;
+    int       headless_mode;
+    unsigned int random_seed;
 } Config;
 
 // ─── System State (shared across all modules) ────────────
@@ -109,6 +112,7 @@ typedef struct {
     // Simulation control
     int   simulation_running;
     int   current_tick;
+    int   shutdown_requested;
 
     // Recent log lines for dashboard
     char  recent_logs[3][256];
@@ -119,7 +123,8 @@ typedef struct {
 
 // ─── I/O Buffer ──────────────────────────────────────────
 typedef struct {
-    Submission      buffer[BUFFER_CAPACITY];
+    Submission      *buffer;
+    int capacity;
     int             head, tail, count;
     sem_t           empty_slots;
     sem_t           filled_slots;

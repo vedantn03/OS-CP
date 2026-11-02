@@ -9,6 +9,7 @@
 #include "scheduler.h"
 #include "memory.h"
 #include "io_buffer.h"
+#include "clock.h"
 
 // ─── Interrupt Vector Table ───────────────────────────────
 static IVTEntry ivt[MAX_INTERRUPTS];
@@ -28,12 +29,6 @@ static pthread_mutex_t int_q_lock = PTHREAD_MUTEX_INITIALIZER;
 static sem_t           int_ready;
 
 // ─── Timestamp ────────────────────────────────────────────
-static long now_ms() {
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return ts.tv_sec * 1000L + ts.tv_nsec / 1000000L;
-}
-
 // ════════════════════════════════════════════════════════
 //  INTERRUPT HANDLERS
 // ════════════════════════════════════════════════════════
@@ -124,7 +119,7 @@ void interrupt_raise(int interrupt_id, int pid) {
         PendingInterrupt *pi = &int_queue[int_q_tail];
         pi->interrupt_id     = interrupt_id;
         pi->pid              = pid;
-        pi->timestamp        = now_ms();
+        pi->timestamp        = (long)clock_now_ms();
 
         int_q_tail  = (int_q_tail + 1) % 64;
         int_q_count++;
@@ -159,7 +154,7 @@ static void dispatch(PendingInterrupt *pi) {
 // ─── Check for overload condition ─────────────────────────
 static void check_overload() {
     pthread_mutex_lock(&g_io_buffer.lock);
-    float fill = (float)g_io_buffer.count / BUFFER_CAPACITY;
+    float fill = (float)g_io_buffer.count / g_io_buffer.capacity;
     pthread_mutex_unlock(&g_io_buffer.lock);
 
     if (fill >= 0.95f) {

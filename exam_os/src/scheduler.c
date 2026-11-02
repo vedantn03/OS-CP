@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include "scheduler.h"
 #include "logger.h"
+#include "rng.h"
 
 // ─── Ready Queue (min-heap by priority) ──────────────────
 static PCB  ready_queue[MAX_STUDENTS];
@@ -182,6 +183,7 @@ static void run_priority() {
 // ─── Main scheduler thread ────────────────────────────────
 void *scheduler_thread(void *arg) {
     (void)arg;
+    rng_seed_thread(1u ^ g_config.random_seed);
     log_event("INFO", "SCHEDULER", "Scheduler thread started");
 
     while (1) {
@@ -208,7 +210,7 @@ void *scheduler_thread(void *arg) {
                         .state          = NEW,
                         .priority       = 1,
                         .total_time     = g_config.exam_duration,
-                        .remaining_time = g_config.exam_duration - (rand() % 10),
+                        .remaining_time = g_config.exam_duration - rng_uniform(10),
                         .waiting_time   = 0,
                         .turnaround_time = 0,
                         .pages_used     = 0

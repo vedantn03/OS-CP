@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <time.h>
+#include <signal.h>
 #include "shared.h"
 #include "config.h"
 #include "logger.h"
@@ -12,11 +13,18 @@
 #include "io_buffer.h"
 #include "interrupt.h"
 #include "dashboard.h"
+#include "rng.h"
 
 // ─── Global instances ─────────────────────────────────────
 SystemState g_state;
 IOBuffer    g_io_buffer;
 Config      g_config;
+static volatile sig_atomic_t shutdown_signal = 0;
+
+static void handle_shutdown_signal(int signal_number) {
+    (void)signal_number;
+    shutdown_signal = 1;
+}
 
 // ─── Init global state ────────────────────────────────────
 static void state_init() {
@@ -55,21 +63,28 @@ static void print_banner() {
 }
 
 int main(int argc, char *argv[]) {
-    srand(time(NULL));
-
     print_banner();
 
     // ─── Load config ──────────────────────────────────────
     config_load_defaults(&g_config);
     config_parse_file(&g_config, "config.conf");
-    config_parse_args(&g_config, argc, argv);
+    if (!config_parse_args(&g_config, argc, argv)) return EXIT_FAILURE;
+    char config_error[128];
+    if (!config_validate(&g_config, config_error, sizeof(config_error))) {
+        fprintf(stderr, "ERROR: Invalid configuration: %s\n", config_error);
+        return EXIT_FAILURE;
+    }
+    signal(SIGINT, handle_shutdown_signal);
+    signal(SIGTERM, handle_shutdown_signal);
     config_print(&g_config);
 
     if (g_config.demo_mode)
         printf("\n  [DEMO MODE] Submission storm at tick 30\n");
 
-    printf("\n  Starting simulation in 2 seconds...\n\n");
-    sleep(2);
+    if (!g_config.headless_mode) {
+        printf("\n  Starting simulation in 2 seconds...\n\n");
+        sleep(2);
+    }
 
     // ─── Init all subsystems ──────────────────────────────
     state_init();
@@ -78,7 +93,7 @@ int main(int argc, char *argv[]) {
     memory_init();
     io_buffer_init();
     interrupt_init();
-    dashboard_init();
+    if (!g_config.headless_mode) dashboard_init();
 
     // ─── Spawn all threads ────────────────────────────────
     pthread_t t_tick, t_logger, t_scheduler,
@@ -90,7 +105,8 @@ int main(int argc, char *argv[]) {
     pthread_create(&t_memory,    NULL, memory_thread,     NULL);
     pthread_create(&t_io,        NULL, io_buffer_thread,  NULL);
     pthread_create(&t_interrupt, NULL, interrupt_thread,  NULL);
-    pthread_create(&t_dashboard, NULL, dashboard_thread,  NULL);
+    if (!g_config.headless_mode)
+        pthread_create(&t_dashboard, NULL, dashboard_thread, NULL);
 
     // ─── Run until exam_duration ticks or 'q' pressed ────
     while (1) {
@@ -98,6 +114,8 @@ int main(int argc, char *argv[]) {
         int tick    = g_state.current_tick;
         int running = g_state.simulation_running;
         int done    = g_state.completed_processes;
+        if (shutdown_signal) g_state.shutdown_requested = 1;
+        if (shutdown_signal) g_state.simulation_running = 0;
         pthread_mutex_unlock(&g_state.lock);
 
         // End conditions
@@ -126,10 +144,10 @@ int main(int argc, char *argv[]) {
 
     io_buffer_shutdown();
     logger_shutdown();
-    dashboard_shutdown();
+    if (!g_config.headless_mode) dashboard_shutdown();
 
     // Wait for all threads
-    pthread_join(t_dashboard, NULL);
+    if (!g_config.headless_mode) pthread_join(t_dashboard, NULL);
     pthread_join(t_interrupt, NULL);
     pthread_join(t_io,        NULL);
     pthread_join(t_memory,    NULL);
@@ -151,6 +169,7 @@ int main(int argc, char *argv[]) {
     pthread_mutex_destroy(&g_io_buffer.lock);
     sem_destroy(&g_io_buffer.empty_slots);
     sem_destroy(&g_io_buffer.filled_slots);
+    free(g_io_buffer.buffer);
 
     return 0;
 }

@@ -1,6 +1,6 @@
-CC      = gcc
-CFLAGS  = -Wall -Wextra -Iinclude -pthread
-LDFLAGS = -lncurses -pthread -lrt
+CC      ?= gcc
+CFLAGS  ?= -std=c11 -D_DEFAULT_SOURCE -Wall -Wextra -Wpedantic -Iinclude -pthread
+LDFLAGS ?= -lncurses -pthread -lrt
 
 SRC = src/main.c \
       src/config.c \
@@ -9,7 +9,9 @@ SRC = src/main.c \
       src/memory.c \
       src/io_buffer.c \
       src/interrupt.c \
-      src/dashboard.c
+      src/dashboard.c \
+      src/clock.c \
+      src/rng.c
 
 OUT = exam_os
 
@@ -27,4 +29,10 @@ run: all
 demo: all
 	./$(OUT) --demo
 
-.PHONY: all clean run demo
+headless: all
+	./$(OUT) --headless
+
+test:
+	sh tests/run_tests.sh
+
+.PHONY: all clean run demo headless test

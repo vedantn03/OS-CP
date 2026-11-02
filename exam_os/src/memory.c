@@ -5,6 +5,8 @@
 #include <time.h>
 #include "memory.h"
 #include "logger.h"
+#include "clock.h"
+#include "rng.h"
 
 // ─── Physical frame pool ──────────────────────────────────
 typedef struct {
@@ -23,12 +25,6 @@ static pthread_mutex_t mem_lock = PTHREAD_MUTEX_INITIALIZER;
 static PageTableEntry page_tables[MAX_STUDENTS][MAX_PAGES];
 
 // ─── Timestamp helper ─────────────────────────────────────
-static long now_ms() {
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return ts.tv_sec * 1000L + ts.tv_nsec / 1000000L;
-}
-
 void memory_init() {
     total_frames = g_config.memory_frames;
     if (total_frames > MAX_FRAMES) total_frames = MAX_FRAMES;
@@ -112,11 +108,11 @@ static void load_page(int pid, int virtual_page, int frame) {
     frame_pool[frame].pid           = pid;
     frame_pool[frame].virtual_page  = virtual_page;
     frame_pool[frame].load_order    = fifo_counter++;
-    frame_pool[frame].last_accessed = now_ms();
+    frame_pool[frame].last_accessed = (long)clock_now_ms();
 
     page_tables[pid][virtual_page].frame_number  = frame;
     page_tables[pid][virtual_page].valid         = 1;
-    page_tables[pid][virtual_page].last_accessed = now_ms();
+    page_tables[pid][virtual_page].last_accessed = (long)clock_now_ms();
     page_tables[pid][virtual_page].load_order    = frame_pool[frame].load_order;
 
     // Simulate disk → memory load delay
@@ -134,8 +130,8 @@ int memory_access(int pid, int virtual_page) {
 
     if (entry->valid) {
         // PAGE HIT
-        entry->last_accessed = now_ms();
-        frame_pool[entry->frame_number].last_accessed = now_ms();
+        entry->last_accessed = (long)clock_now_ms();
+        frame_pool[entry->frame_number].last_accessed = (long)clock_now_ms();
 
         pthread_mutex_lock(&g_state.lock);
         g_state.page_hits++;
@@ -210,6 +206,7 @@ void memory_free_process(int pid) {
 // Simulates memory accesses for the currently running process
 void *memory_thread(void *arg) {
     (void)arg;
+    rng_seed_thread(2u ^ g_config.random_seed);
     log_event("INFO", "MEMORY", "Memory thread started");
 
     while (1) {
@@ -222,9 +219,9 @@ void *memory_thread(void *arg) {
 
         if (curr_pid > 0) {
             // Simulate 1-3 random page accesses per tick
-            int accesses = 1 + rand() % 3;
+            int accesses = 1 + rng_uniform(3);
             for (int i = 0; i < accesses; i++) {
-                int vpage = rand() % 8; // working set of 8 pages per process
+                int vpage = rng_uniform(8); // working set of 8 pages per process
                 memory_access(curr_pid - 1, vpage);
             }
         }

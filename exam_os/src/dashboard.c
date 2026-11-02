@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <time.h>
 #include "dashboard.h"
+#include "clock.h"
 
 #define REFRESH_MS 500
 
@@ -11,14 +12,8 @@ static int dash_running = 1;
 static long start_time  = 0;
 
 // ─── Timestamp ────────────────────────────────────────────
-static long now_ms() {
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return ts.tv_sec * 1000L + ts.tv_nsec / 1000000L;
-}
-
 static void format_elapsed(char *buf, int size) {
-    long elapsed = (now_ms() - start_time) / 1000;
+    long elapsed = (long)((clock_now_ms() - start_time) / 1000);
     int  h = elapsed / 3600;
     int  m = (elapsed % 3600) / 60;
     int  s = elapsed % 60;
@@ -51,7 +46,7 @@ static void draw_box(WINDOW *win, const char *title) {
 }
 
 void dashboard_init() {
-    start_time = now_ms();
+    start_time = (long)clock_now_ms();
 }
 
 void dashboard_shutdown() {
@@ -88,6 +83,15 @@ void *dashboard_thread(void *arg) {
 
     int max_y __attribute__((unused)), max_x;
     getmaxyx(stdscr, max_y, max_x);
+    if (max_y < 31 || max_x < 80) {
+        endwin();
+        fprintf(stderr, "Terminal too small for dashboard (need at least 80x31, got %dx%d)\n",
+                max_x, max_y);
+        pthread_mutex_lock(&g_state.lock);
+        g_state.simulation_running = 0;
+        pthread_mutex_unlock(&g_state.lock);
+        return NULL;
+    }
 
     // ─── Create windows ───────────────────────────────────
     // Header
@@ -146,7 +150,7 @@ void *dashboard_thread(void *arg) {
         float hit_rate   = total_pages > 0
                            ? (float)page_hits / total_pages * 100.0f : 0.0f;
         float mem_pct    = (float)frames_used / g_config.memory_frames * 100.0f;
-        float buf_pct    = (float)buf_count   / BUFFER_CAPACITY        * 100.0f;
+        float buf_pct    = (float)buf_count   / g_io_buffer.capacity * 100.0f;
 
         // ── HEADER ─────────────────────────────────────────
         werase(w_header);
@@ -212,7 +216,7 @@ void *dashboard_thread(void *arg) {
         mvwprintw(w_io, 2, 11 + bar_w + 1, "%5.1f%%", buf_pct);
 
         mvwprintw(w_io, 3, 2, "Queued  : %d / %d",
-                  buf_count, BUFFER_CAPACITY);
+                  buf_count, g_io_buffer.capacity);
         mvwprintw(w_io, 4, 2, "Total   : %d submitted", total_subs);
         mvwprintw(w_io, 5, 2, "Dropped : ");
         wattron(w_io, dropped_subs > 0 ? COLOR_PAIR(4) : COLOR_PAIR(1));

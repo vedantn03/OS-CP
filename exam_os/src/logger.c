@@ -4,6 +4,7 @@
 #include <time.h>
 #include <pthread.h>
 #include "logger.h"
+#include "clock.h"
 
 // ─── Internal log queue ──────────────────────────────────
 static LogEntry   log_queue[MAX_LOG_QUEUE];
@@ -14,12 +15,6 @@ static FILE           *log_file = NULL;
 static int             logger_running = 1;
 
 // ─── Get nanosecond timestamp ────────────────────────────
-static long get_timestamp_ns() {
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return ts.tv_sec * 1000000000L + ts.tv_nsec;
-}
-
 void logger_init() {
     sem_init(&q_ready, 0, 0);
     log_file = fopen("output/system_log.txt", "w");
@@ -42,7 +37,7 @@ void log_event(const char *level, const char *subsystem, const char *message) {
 
     if (q_count < MAX_LOG_QUEUE) {
         LogEntry *e = &log_queue[q_tail];
-        e->timestamp_ns = get_timestamp_ns();
+        e->timestamp_ns = clock_now_ns();
         strncpy(e->level,     level,     sizeof(e->level)     - 1);
         strncpy(e->subsystem, subsystem, sizeof(e->subsystem) - 1);
         strncpy(e->message,   message,   sizeof(e->message)   - 1);
@@ -133,5 +128,10 @@ void logger_write_report() {
 
     // Print to terminal too
     printf("\n");
-    system("cat output/summary.txt");
+    FILE *summary = fopen("output/summary.txt", "r");
+    if (summary) {
+        char line[256];
+        while (fgets(line, sizeof(line), summary)) fputs(line, stdout);
+        fclose(summary);
+    }
 }
