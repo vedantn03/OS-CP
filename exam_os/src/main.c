@@ -49,7 +49,7 @@ static void *tick_thread(void *arg) {
         pthread_mutex_unlock(&g_state.lock);
 
         if (!running) break;
-        usleep(TIME_TICK_MS * 1000);
+        usleep((useconds_t)g_config.tick_ms * 1000);
     }
     return NULL;
 }
@@ -134,7 +134,7 @@ int main(int argc, char *argv[]) {
             break;
         }
 
-        usleep(TIME_TICK_MS * 1000);
+        usleep((useconds_t)g_config.tick_ms * 1000);
     }
 
     // ─── Shutdown sequence ────────────────────────────────

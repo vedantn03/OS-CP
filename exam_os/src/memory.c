@@ -146,8 +146,9 @@ int memory_access(int pid, int virtual_page) {
         g_state.page_hits++;
         pthread_mutex_unlock(&g_state.lock);
 
+        int frame_number = entry->frame_number;
         pthread_mutex_unlock(&mem_lock);
-        return entry->frame_number;
+        return frame_number;
     }
 
     // PAGE FAULT
@@ -300,7 +301,7 @@ void *memory_thread(void *arg) {
             }
         }
 
-        usleep(TIME_TICK_MS * 1000);
+        usleep((useconds_t)g_config.tick_ms * 1000);
     }
 
     log_event("INFO", "MEMORY", "Memory thread exiting");

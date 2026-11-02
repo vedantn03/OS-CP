@@ -29,6 +29,10 @@ typedef enum {
     LRU, FIFO
 } PageAlgo;
 
+typedef enum {
+    WORKLOAD_LEGACY, WORKLOAD_INTERACTIVE
+} WorkloadKind;
+
 // ─── Process Control Block ───────────────────────────────
 typedef struct {
     int          pid;
@@ -47,6 +51,7 @@ typedef struct {
     int          timeout_pending;
     int          timed_out;
     int          cpu_ticks;
+    int          wait_until_tick;
 } PCB;
 
 // ─── Page Table Entry ────────────────────────────────────
@@ -93,6 +98,8 @@ typedef struct {
     int       arrival_batch;
     int       arrival_interval;
     int       strict;
+    int       tick_ms;
+    WorkloadKind workload;
 } Config;
 
 // ─── System State (shared across all modules) ────────────

@@ -8,3 +8,16 @@
 - Run `make clean && make` and the test suite under `exam_os/tests` before submitting changes.
 - NEVER call log_event() while holding g_state.lock (log_event takes g_state.lock itself and would deadlock). Copy what you need, unlock, then log.
 - Process state changes go through process_set_state() / process_terminate() (src/process.c) once they exist. Never assign PCB.state directly.
+## Scope discipline
+- Do exactly what the prompt lists. If you find another bug, report it in the final report; do not fix it unless the prompt says so.
+- Touch only the files the prompt allows. If a requirement seems to need another file, stop and report instead.
+- Do not run sanitizers unless the prompt lists them.
+- Finish with a short report: files changed, commands run with results, deviations from the spec.
+- After the task, append one entry to docs/PROJECT_STATE.md (Changelog section).
+## Phase 1.5-2.2 scope
+- Keep LEGACY workload behavior as the default; INTERACTIVE may add bounded
+  I/O waits through the existing process state machine.
+- Keep tick-based behavior driven by the configured tick duration; do not use
+  wall-clock shortcuts for process accounting.
+- Preserve `tests/run_tests.sh`, `.gitignore`, and `exam_os/output/.gitkeep`.
+- Memory table and frame access must use `mem_lock` before `g_state.lock`.

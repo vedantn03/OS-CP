@@ -93,6 +93,15 @@ records=$(grep -c '^\[' output/submissions.txt || true)
 [ "$records" -eq "$total" ] || fail T14 "submission records=$records total=$total"
 pass T14
 
+for WORKLOAD in LEGACY INTERACTIVE
+do
+    "$BIN" --headless --strict --workload "$WORKLOAD" --students 10 --duration 40 --seed 11 >"$TMP/workload.out" 2>&1 ||
+        fail T15 "$WORKLOAD workload failed"
+    grep -q '^PASS I[1-6]' output/invariants.txt ||
+        fail T15 "$WORKLOAD invariant failure"
+done
+pass T15
+
 make clean >/dev/null
 pass T8
-printf 'All T1-T14 tests passed.\n'
+printf 'All T1-T15 tests passed.\n'

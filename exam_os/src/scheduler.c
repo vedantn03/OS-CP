@@ -102,6 +102,23 @@ static void rr_remove(int index) {
     if (rr_index >= rq_size) rr_index = 0;
 }
 
+static void wake_waiting_processes(int tick) {
+    pthread_mutex_lock(&rq_lock);
+    pthread_mutex_lock(&g_state.lock);
+    for (int slot = 0; slot < g_state.process_count; slot++) {
+        PCB *p = &g_state.processes[slot];
+        if (p->state == WAITING && tick >= p->wait_until_tick) {
+            if (process_set_state(p, READY) == 0) {
+                p->last_ready_tick = tick;
+                if (g_config.sched_algo == PRIORITY)
+                    heap_push(slot);
+            }
+        }
+    }
+    pthread_mutex_unlock(&g_state.lock);
+    pthread_mutex_unlock(&rq_lock);
+}
+
 void scheduler_init(void) {
     rq_size = 0;
     rr_index = 0;
@@ -199,7 +216,7 @@ static int dispatch_one(const char *algorithm, int *busy) {
     pthread_mutex_unlock(&g_state.lock);
     pthread_mutex_unlock(&rq_lock);
 
-    usleep(TIME_TICK_MS * 500);
+    usleep((useconds_t)g_config.tick_ms * 500);
 
     int done = 0;
     int pid = p->pid;
@@ -260,6 +277,8 @@ void *scheduler_thread(void *arg) {
         pthread_mutex_unlock(&g_state.lock);
         if (!running) break;
 
+        wake_waiting_processes(tick);
+
         if (tick >= next_arrival_tick) {
             pthread_mutex_lock(&g_state.lock);
             int added = g_state.process_count;
@@ -297,7 +316,7 @@ void *scheduler_thread(void *arg) {
         g_state.cpu_utilization = total_iterations > 0
             ? 100.0f * busy_iterations / total_iterations : 0.0f;
         pthread_mutex_unlock(&g_state.lock);
-        usleep(TIME_TICK_MS * 1000);
+        usleep((useconds_t)g_config.tick_ms * 1000);
     }
 
     log_event("INFO", "SCHEDULER", "Scheduler thread exiting");

@@ -7,6 +7,7 @@
 #include "logger.h"
 #include "clock.h"
 #include "rng.h"
+#include "process.h"
 
 #define FLUSH_THRESHOLD 0.80  // flush when 80% full
 
@@ -88,6 +89,18 @@ int io_buffer_submit(int pid, int question_id,
     snprintf(msg, sizeof(msg), "PID %d submitted Q%d%s",
              pid, question_id, is_partial ? " (PARTIAL/timeout)" : "");
     log_event("INFO", "IO", msg);
+
+    if (g_config.workload == WORKLOAD_INTERACTIVE && !is_partial) {
+        int slot = process_slot(pid);
+        if (slot >= 0) {
+            pthread_mutex_lock(&g_state.lock);
+            PCB *p = &g_state.processes[slot];
+            if (p->state == RUNNING &&
+                process_set_state(p, WAITING) == 0)
+                p->wait_until_tick = g_state.current_tick + 1;
+            pthread_mutex_unlock(&g_state.lock);
+        }
+    }
 
     return 0;
 }
@@ -221,7 +234,7 @@ void *io_buffer_thread(void *arg) {
             last_flush_tick = tick;
         }
 
-        usleep(TIME_TICK_MS * 1000);
+        usleep((useconds_t)g_config.tick_ms * 1000);
     }
 
     if (disk_file && disk_file != stderr) fclose(disk_file);
