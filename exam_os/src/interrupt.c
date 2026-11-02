@@ -61,16 +61,12 @@ static void handle_exam_timeout(int pid, SystemState *state) {
 // Handler 1: System overload — pause new logins
 static void handle_overload(int pid, SystemState *state) {
     (void)pid;
-    log_event("WARN", "INTERRUPT", "OVERLOAD: Buffer critical — pausing new submissions");
-
     pthread_mutex_lock(&state->lock);
     state->overload_signals++;
+    state->backpressure_until_tick = state->current_tick + BACKPRESSURE_TICKS;
     pthread_mutex_unlock(&state->lock);
 
-    // Simulate brief pause — back-pressure
-    usleep(TIME_TICK_MS * 2000);
-
-    log_event("INFO", "INTERRUPT", "OVERLOAD resolved — resuming normal operation");
+    log_event("WARN", "INTERRUPT", "OVERLOAD: Buffer critical — pausing new submissions");
 }
 
 // Handler 2: Page fault notification
@@ -127,6 +123,10 @@ void interrupt_raise(int interrupt_id, int pid) {
         int_q_tail  = (int_q_tail + 1) % 64;
         int_q_count++;
         sem_post(&int_ready);
+    } else {
+        pthread_mutex_lock(&g_state.lock);
+        g_state.dropped_interrupts++;
+        pthread_mutex_unlock(&g_state.lock);
     }
 
     pthread_mutex_unlock(&int_q_lock);
@@ -160,7 +160,12 @@ static void check_overload() {
     float fill = (float)g_io_buffer.count / g_io_buffer.capacity;
     pthread_mutex_unlock(&g_io_buffer.lock);
 
-    if (fill >= 0.95f) {
+    pthread_mutex_lock(&g_state.lock);
+    int tick = g_state.current_tick;
+    int backpressure_until = g_state.backpressure_until_tick;
+    pthread_mutex_unlock(&g_state.lock);
+
+    if (fill >= 0.95f && tick >= backpressure_until) {
         interrupt_raise(INT_OVERLOAD, -1);
     }
 }

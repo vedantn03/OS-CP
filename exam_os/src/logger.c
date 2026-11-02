@@ -13,6 +13,14 @@ static pthread_mutex_t q_lock = PTHREAD_MUTEX_INITIALIZER;
 static sem_t           q_ready;
 static FILE           *log_file = NULL;
 static int             logger_running = 1;
+static int             logger_io_warned = 0;
+
+static void warn_logger_io_failure(void) {
+    if (!logger_io_warned) {
+        fprintf(stderr, "WARNING: Logger output failed\n");
+        logger_io_warned = 1;
+    }
+}
 
 // ─── Get nanosecond timestamp ────────────────────────────
 void logger_init() {
@@ -22,8 +30,9 @@ void logger_init() {
         fprintf(stderr, "WARNING: Could not open log file. Logging to stderr.\n");
         log_file = stderr;
     }
-    fprintf(log_file, "=== EXAM OS SIMULATION LOG ===\n\n");
-    fflush(log_file);
+    if (fprintf(log_file, "=== EXAM OS SIMULATION LOG ===\n\n") < 0 ||
+        fflush(log_file) != 0)
+        warn_logger_io_failure();
 }
 
 void logger_shutdown() {
@@ -47,6 +56,10 @@ void log_event(const char *level, const char *subsystem, const char *message) {
         q_tail = (q_tail + 1) % MAX_LOG_QUEUE;
         q_count++;
         sem_post(&q_ready);
+    } else {
+        pthread_mutex_lock(&g_state.lock);
+        g_state.dropped_logs++;
+        pthread_mutex_unlock(&g_state.lock);
     }
     // if queue full, silently drop (never block the caller)
 
@@ -66,32 +79,28 @@ void *logger_thread(void *arg) {
 
     while (1) {
         sem_wait(&q_ready);
-
-        pthread_mutex_lock(&q_lock);
-
-        if (!logger_running && q_count == 0) {
+        while (1) {
+            pthread_mutex_lock(&q_lock);
+            if (q_count == 0) {
+                int done = !logger_running;
+                pthread_mutex_unlock(&q_lock);
+                if (done) goto logger_done;
+                break;
+            }
+            LogEntry e = log_queue[q_head];
+            q_head = (q_head + 1) % MAX_LOG_QUEUE;
+            q_count--;
             pthread_mutex_unlock(&q_lock);
-            break;
+
+            long ms = e.timestamp_ns / 1000000;
+            if (fprintf(log_file, "[%8ld ms] [%-5s] [%-10s] %s\n",
+                        ms, e.level, e.subsystem, e.message) < 0 ||
+                fflush(log_file) != 0)
+                warn_logger_io_failure();
         }
-
-        if (q_count == 0) {
-            pthread_mutex_unlock(&q_lock);
-            continue;
-        }
-
-        LogEntry e = log_queue[q_head];
-        q_head = (q_head + 1) % MAX_LOG_QUEUE;
-        q_count--;
-
-        pthread_mutex_unlock(&q_lock);
-
-        // Write to file
-        long ms = e.timestamp_ns / 1000000;
-        fprintf(log_file, "[%8ld ms] [%-5s] [%-10s] %s\n",
-                ms, e.level, e.subsystem, e.message);
-        fflush(log_file);
     }
 
+logger_done:
     if (log_file && log_file != stderr) fclose(log_file);
     return NULL;
 }
@@ -139,6 +148,7 @@ void logger_write_report() {
             responded > 0 ? response / responded : 0.0);
     fprintf(f, "║   Completed Exams   : %-18d ║\n", g_state.finished_ok);
     fprintf(f, "║   Timeouts Fired    : %-18d ║\n", g_state.timeouts_fired);
+    fprintf(f, "║   Dropped Log Records: %-17d ║\n", g_state.dropped_logs);
     fprintf(f, "╠══════════════════════════════════════════╣\n");
     fprintf(f, "║ MEMORY                                   ║\n");
     fprintf(f, "║   Page Faults       : %-18d ║\n", g_state.page_faults);
@@ -149,9 +159,11 @@ void logger_write_report() {
     fprintf(f, "║   Total Submissions : %-18d ║\n", g_state.total_submissions);
     fprintf(f, "║   Dropped           : %-18d ║\n", g_state.dropped_submissions);
     fprintf(f, "║   Flush Count       : %-18d ║\n", g_state.flush_count);
+    fprintf(f, "║   Throttled Submissions: %-14d ║\n", g_state.throttled_submissions);
     fprintf(f, "╠══════════════════════════════════════════╣\n");
     fprintf(f, "║ INTERRUPTS                               ║\n");
     fprintf(f, "║   Overload Signals  : %-18d ║\n", g_state.overload_signals);
+    fprintf(f, "║   Dropped Interrupts: %-18d ║\n", g_state.dropped_interrupts);
     fprintf(f, "╚══════════════════════════════════════════╝\n");
 
     pthread_mutex_unlock(&g_state.lock);

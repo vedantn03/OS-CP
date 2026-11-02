@@ -135,6 +135,7 @@ void *dashboard_thread(void *arg) {
         int   overloads      = g_state.overload_signals;
         int   proc_count     = g_state.process_count;
         int   tick           = g_state.current_tick;
+        int   log_index      = g_state.log_index;
         char  logs[3][256];
         for (int i = 0; i < 3; i++)
             strncpy(logs[i], g_state.recent_logs[i], 255);
@@ -277,7 +278,7 @@ void *dashboard_thread(void *arg) {
         werase(w_logs);
         draw_box(w_logs, " RECENT EVENTS ");
         for (int i = 0; i < 3; i++) {
-            int idx = (g_state.log_index - 3 + i + MAX_LOG_QUEUE) % 3;
+            int idx = (((log_index - 3 + i) % 3) + 3) % 3;
             int pair = (strstr(logs[idx], "ERROR") || strstr(logs[idx], "TIMEOUT"))
                        ? 4
                        : (strstr(logs[idx], "WARN") ? 3 : 6);

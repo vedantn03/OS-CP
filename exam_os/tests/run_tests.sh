@@ -60,6 +60,19 @@ do
 done
 pass T10
 
+run_t11() {
+    "$BIN" --headless --students 40 --duration 100 --arrival-batch 10 --arrival-interval 5 --seed 4 >"$TMP/t11.out" 2>&1 ||
+        fail T11 "configurable arrival run failed"
+}
+run_t11
+pass T11
+
+if "$BIN" --headless --students 0 --duration 1 >"$TMP/t12.out" 2>&1; then
+    fail T12 "invalid configuration was accepted"
+fi
+grep -q "Invalid configuration" "$TMP/t12.out" || fail T12 "invalid configuration was not reported"
+pass T12
+
 make clean >/dev/null
 pass T8
-printf 'All T1-T10 tests passed.\n'
+printf 'All T1-T12 tests passed.\n'

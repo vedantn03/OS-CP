@@ -252,6 +252,7 @@ void *scheduler_thread(void *arg) {
 
     int total_iterations = 0;
     int busy_iterations = 0;
+    int next_arrival_tick = 0;
     while (1) {
         pthread_mutex_lock(&g_state.lock);
         int running = g_state.simulation_running;
@@ -259,13 +260,13 @@ void *scheduler_thread(void *arg) {
         pthread_mutex_unlock(&g_state.lock);
         if (!running) break;
 
-        if (tick % 10 == 0) {
+        if (tick >= next_arrival_tick) {
             pthread_mutex_lock(&g_state.lock);
             int added = g_state.process_count;
             pthread_mutex_unlock(&g_state.lock);
             if (added < g_config.num_students) {
-                int batch = (g_config.num_students - added < 5)
-                    ? g_config.num_students - added : 5;
+                int batch = (g_config.num_students - added < g_config.arrival_batch)
+                    ? g_config.num_students - added : g_config.arrival_batch;
                 for (int i = 0; i < batch; i++) {
                     PCB p = {
                         .pid = added + i + 1,
@@ -280,6 +281,8 @@ void *scheduler_thread(void *arg) {
                     scheduler_add_process(p);
                 }
             }
+            next_arrival_tick = tick - (tick % g_config.arrival_interval)
+                              + g_config.arrival_interval;
         }
 
         int busy = 0;

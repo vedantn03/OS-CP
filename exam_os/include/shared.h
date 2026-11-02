@@ -14,6 +14,7 @@
 #define MAX_LOG_QUEUE    512
 #define MAX_INTERRUPTS   8
 #define TIME_TICK_MS     100
+#define BACKPRESSURE_TICKS 5
 
 // ─── Enums ───────────────────────────────────────────────
 typedef enum {
@@ -89,6 +90,8 @@ typedef struct {
     int       headless_mode;
     unsigned int random_seed;
     int       session_limit;
+    int       arrival_batch;
+    int       arrival_interval;
 } Config;
 
 // ─── System State (shared across all modules) ────────────
@@ -100,6 +103,11 @@ typedef struct {
     int   dispatches;
     int   completed_processes;
     int   finished_ok;
+    int   flushed_records;
+    int   dropped_logs;
+    int   backpressure_until_tick;
+    int   throttled_submissions;
+    int   dropped_interrupts;
 
     // Memory
     int   page_faults;

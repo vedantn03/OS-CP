@@ -44,7 +44,6 @@ void io_buffer_init() {
 
 void io_buffer_shutdown() {
     io_running = 0;
-    sem_post(&g_io_buffer.filled_slots); // wake flusher thread to exit
 }
 
 // ─── Producer: called by exam processes ──────────────────
@@ -119,15 +118,20 @@ static int flush_buffer() {
         sem_post(&g_io_buffer.empty_slots);
 
         // Write to simulated disk
-        fprintf(disk_file, "[%ld ms] PID=%-3d Q=%-2d %s ANSWER=%s\n",
-                s.timestamp, s.pid, s.question_id,
-                s.is_partial ? "[PARTIAL]" : "        ",
-                s.answer);
-        flushed++;
+        if (fprintf(disk_file, "[%ld ms] PID=%-3d Q=%-2d %s ANSWER=%s\n",
+                    s.timestamp, s.pid, s.question_id,
+                    s.is_partial ? "[PARTIAL]" : "        ",
+                    s.answer) >= 0) {
+            flushed++;
+            pthread_mutex_lock(&g_state.lock);
+            g_state.flushed_records++;
+            pthread_mutex_unlock(&g_state.lock);
+        }
     }
 
     if (flushed > 0) {
-        fflush(disk_file);
+        if (fflush(disk_file) != 0)
+            fprintf(stderr, "WARNING: Could not flush submissions file\n");
 
         pthread_mutex_lock(&g_state.lock);
         g_state.flush_count++;
@@ -143,13 +147,15 @@ static int flush_buffer() {
 
 // ─── Demo mode: submission storm ─────────────────────────
 static void trigger_submission_storm() {
-    log_event("WARN", "IO", "SUBMISSION STORM triggered — 30 simultaneous submissions!");
-
     pthread_mutex_lock(&g_state.lock);
     int count = g_state.process_count;
     pthread_mutex_unlock(&g_state.lock);
 
     int storms = count < 30 ? count : 30;
+    char msg[128];
+    snprintf(msg, sizeof(msg),
+             "SUBMISSION STORM triggered — %d simultaneous submissions!", storms);
+    log_event("WARN", "IO", msg);
     for (int i = 0; i < storms; i++) {
         char answer[64];
         snprintf(answer, sizeof(answer), "ANS_%d_%d", i, rng_uniform(100));
@@ -164,6 +170,7 @@ void *io_buffer_thread(void *arg) {
     log_event("INFO", "IO", "I/O buffer thread started");
 
     int storm_triggered = 0;
+    int last_flush_tick = 0;
 
     while (1) {
         pthread_mutex_lock(&g_state.lock);
@@ -188,15 +195,20 @@ void *io_buffer_thread(void *arg) {
         pthread_mutex_lock(&g_state.lock);
         int pid     = g_state.running_pid;
         int prcount = g_state.process_count;
+        int backpressure_until = g_state.backpressure_until_tick;
         pthread_mutex_unlock(&g_state.lock);
 
-        if (pid > 0 && prcount > 0) {
+        if (pid > 0 && prcount > 0 && tick >= backpressure_until) {
             // 30% chance a process submits an answer each tick
             if (rng_uniform(100) < 30) {
                 char answer[64];
                 snprintf(answer, sizeof(answer), "ANS_%d", rng_uniform(1000));
                 io_buffer_submit(pid, rng_uniform(10) + 1, answer, 0);
             }
+        } else if (pid > 0 && prcount > 0 && tick < backpressure_until && !g_config.demo_mode) {
+            pthread_mutex_lock(&g_state.lock);
+            g_state.throttled_submissions++;
+            pthread_mutex_unlock(&g_state.lock);
         }
 
         // Flush if above threshold or every 15 ticks
@@ -204,8 +216,10 @@ void *io_buffer_thread(void *arg) {
         float fill = (float)g_io_buffer.count / g_io_buffer.capacity;
         pthread_mutex_unlock(&g_io_buffer.lock);
 
-        if (fill >= FLUSH_THRESHOLD || tick % 15 == 0)
+        if (fill >= FLUSH_THRESHOLD || tick - last_flush_tick >= 15) {
             flush_buffer();
+            last_flush_tick = tick;
+        }
 
         usleep(TIME_TICK_MS * 1000);
     }
