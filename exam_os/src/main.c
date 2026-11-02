@@ -14,6 +14,7 @@
 #include "interrupt.h"
 #include "dashboard.h"
 #include "rng.h"
+#include "invariants.h"
 
 // ─── Global instances ─────────────────────────────────────
 SystemState g_state;
@@ -158,6 +159,9 @@ int main(int argc, char *argv[]) {
     // ─── Write final report ───────────────────────────────
     printf("\n  Simulation complete. Writing report...\n");
     logger_write_report();
+    int invariant_failures = invariants_run();
+    if (invariant_failures > 0)
+        fprintf(stderr, "INVARIANT VIOLATIONS: %d\n", invariant_failures);
 
     printf("\n  Output files:\n");
     printf("    output/system_log.txt   — full event log\n");
@@ -171,5 +175,5 @@ int main(int argc, char *argv[]) {
     sem_destroy(&g_io_buffer.filled_slots);
     free(g_io_buffer.buffer);
 
-    return 0;
+    return (g_config.strict && invariant_failures > 0) ? 3 : 0;
 }

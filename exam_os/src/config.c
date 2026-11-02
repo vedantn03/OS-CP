@@ -20,6 +20,7 @@ void config_load_defaults(Config *cfg) {
     cfg->session_limit   = 0;
     cfg->arrival_batch   = 5;
     cfg->arrival_interval = 10;
+    cfg->strict          = 0;
 }
 
 int config_parse_file(Config *cfg, const char *filepath) {
@@ -69,6 +70,7 @@ int config_parse_args(Config *cfg, int argc, char *argv[]) {
             cfg->page_algo  = (strcmp(argv[++i], "FIFO") == 0) ? FIFO : LRU;
         else if (strcmp(argv[i], "--demo")     == 0) cfg->demo_mode = 1;
         else if (strcmp(argv[i], "--headless") == 0) cfg->headless_mode = 1;
+        else if (strcmp(argv[i], "--strict")   == 0) cfg->strict = 1;
         else if (strcmp(argv[i], "--seed")    == 0 && i+1 < argc) cfg->random_seed = (unsigned int)strtoul(argv[++i], NULL, 10);
         else if (strcmp(argv[i], "--help")   == 0) {
             printf("Usage: ./exam_os [options]\n");
@@ -85,6 +87,7 @@ int config_parse_args(Config *cfg, int argc, char *argv[]) {
             printf("  --headless      Disable dashboard\n");
             printf("  --demo          Enable demo mode\n");
             printf("  --seed N        Random seed\n");
+            printf("  --strict        Exit with status 3 if invariants fail\n");
             exit(EXIT_SUCCESS);
         }
         else {

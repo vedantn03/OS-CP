@@ -7,6 +7,7 @@ SRC = src/main.c \
       src/logger.c \
       src/scheduler.c \
       src/process.c \
+      src/invariants.c \
       src/memory.c \
       src/io_buffer.c \
       src/interrupt.c \
@@ -22,7 +23,7 @@ $(OUT): $(SRC)
 	$(CC) $(CFLAGS) -o $(OUT) $(SRC) $(LDFLAGS)
 
 clean:
-	rm -f $(OUT) output/*.txt output/*.json
+	rm -f $(OUT) $(OUT)_asan $(OUT)_tsan output/*.txt output/*.json
 
 run: all
 	./$(OUT)
@@ -43,3 +44,10 @@ exam_os_tsan: $(SRC)
 	$(CC) $(CFLAGS) -fsanitize=thread -g -O1 -fno-omit-frame-pointer -o $@ $(SRC) $(LDFLAGS) -fsanitize=thread -g -O1 -fno-omit-frame-pointer
 
 .PHONY: tsan
+
+asan: exam_os_asan
+
+exam_os_asan: $(SRC)
+	$(CC) $(CFLAGS) -fsanitize=address -g -O1 -fno-omit-frame-pointer -o $@ $(SRC) $(LDFLAGS) -fsanitize=address
+
+.PHONY: asan

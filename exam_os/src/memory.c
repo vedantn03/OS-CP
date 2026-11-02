@@ -127,6 +127,13 @@ int memory_access(int pid, int virtual_page) {
     if (virtual_page < 0 || virtual_page >= MAX_PAGES) return -1;
 
     pthread_mutex_lock(&mem_lock);
+    pthread_mutex_lock(&g_state.lock);
+    int terminated = g_state.processes[slot].state == TERMINATED;
+    pthread_mutex_unlock(&g_state.lock);
+    if (terminated) {
+        pthread_mutex_unlock(&mem_lock);
+        return -1;
+    }
 
     PageTableEntry *entry = &page_tables[slot][virtual_page];
 
@@ -190,6 +197,7 @@ void memory_free_process(int pid) {
             frame_pool[i].pid                 = -1;
             frame_pool[i].virtual_page        = -1;
         }
+
     }
 
     pthread_mutex_lock(&g_state.lock);
@@ -204,6 +212,68 @@ void memory_free_process(int pid) {
     char msg[64];
     snprintf(msg, sizeof(msg), "Freed all frames for PID %d", pid);
     log_event("INFO", "MEMORY", msg);
+}
+
+int memory_audit(char *msg, size_t msglen) {
+    int violations = 0;
+    int owned_frames = 0;
+
+    if (msglen > 0) msg[0] = '\0';
+    pthread_mutex_lock(&mem_lock);
+    pthread_mutex_lock(&g_state.lock);
+
+    for (int frame = 0; frame < total_frames; frame++) {
+        int slot = frame_pool[frame].pid;
+        if (slot < 0) continue;
+        owned_frames++;
+        if (slot >= MAX_STUDENTS ||
+            frame_pool[frame].virtual_page < 0 ||
+            frame_pool[frame].virtual_page >= MAX_PAGES) {
+            violations++;
+            if (msg[0] == '\0')
+                snprintf(msg, msglen, "frame %d has invalid owner/page", frame);
+            continue;
+        }
+        PageTableEntry *entry = &page_tables[slot][frame_pool[frame].virtual_page];
+        if (!entry->valid || entry->frame_number != frame) {
+            violations++;
+            if (msg[0] == '\0')
+                snprintf(msg, msglen, "frame %d owner entry is inconsistent", frame);
+        }
+        if (g_state.processes[slot].state == TERMINATED) {
+            violations++;
+            if (msg[0] == '\0')
+                snprintf(msg, msglen, "frame %d is owned by terminated slot %d",
+                         frame, slot);
+        }
+    }
+
+    for (int slot = 0; slot < MAX_STUDENTS; slot++) {
+        for (int page = 0; page < MAX_PAGES; page++) {
+            PageTableEntry *entry = &page_tables[slot][page];
+            if (!entry->valid) continue;
+            int frame = entry->frame_number;
+            if (frame < 0 || frame >= total_frames ||
+                frame_pool[frame].pid != slot ||
+                frame_pool[frame].virtual_page != page) {
+                violations++;
+                if (msg[0] == '\0')
+                    snprintf(msg, msglen, "slot %d page %d has inconsistent frame",
+                             slot, page);
+            }
+        }
+    }
+
+    if (g_state.frames_used != owned_frames) {
+        violations++;
+        if (msg[0] == '\0')
+            snprintf(msg, msglen, "frames_used=%d owned=%d",
+                     g_state.frames_used, owned_frames);
+    }
+
+    pthread_mutex_unlock(&g_state.lock);
+    pthread_mutex_unlock(&mem_lock);
+    return violations;
 }
 
 // ─── Memory thread ────────────────────────────────────────

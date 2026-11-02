@@ -73,6 +73,26 @@ fi
 grep -q "Invalid configuration" "$TMP/t12.out" || fail T12 "invalid configuration was not reported"
 pass T12
 
+for CASE in \
+    "--algo RR --students 20 --duration 100" \
+    "--algo PRIORITY --students 20 --duration 100" \
+    "--page FIFO --frames 8 --students 20 --duration 100" \
+    "--demo --buffer 8 --students 20 --duration 100" \
+    "--limit 10 --students 10 --duration 80"
+do
+    "$BIN" --headless --strict --seed 11 $CASE >"$TMP/t13.out" 2>&1 ||
+        fail T13 "strict run failed: $CASE"
+    if grep -q '^FAIL ' output/invariants.txt; then
+        fail T13 "invariant failure: $CASE: $(grep '^FAIL ' output/invariants.txt)"
+    fi
+done
+pass T13
+
+total=$(grep 'Total Submissions' output/summary.txt | sed 's/.*: *//; s/[^0-9].*//')
+records=$(grep -c '^\[' output/submissions.txt || true)
+[ "$records" -eq "$total" ] || fail T14 "submission records=$records total=$total"
+pass T14
+
 make clean >/dev/null
 pass T8
-printf 'All T1-T12 tests passed.\n'
+printf 'All T1-T14 tests passed.\n'

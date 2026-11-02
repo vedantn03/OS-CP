@@ -92,6 +92,7 @@ typedef struct {
     int       session_limit;
     int       arrival_batch;
     int       arrival_interval;
+    int       strict;
 } Config;
 
 // ─── System State (shared across all modules) ────────────
