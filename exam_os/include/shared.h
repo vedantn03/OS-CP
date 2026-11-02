@@ -97,6 +97,7 @@ typedef struct {
     int   running_pid;
     float cpu_utilization;
     int   context_switches;
+    int   dispatches;
     int   completed_processes;
     int   finished_ok;
 

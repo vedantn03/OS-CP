@@ -107,12 +107,36 @@ void logger_write_report() {
     float hit_rate = total > 0
         ? (float)g_state.page_hits / total * 100.0f
         : 0.0f;
+    double waiting = 0.0;
+    double turnaround = 0.0;
+    double response = 0.0;
+    int terminated = 0;
+    int responded = 0;
+    for (int i = 0; i < g_state.process_count; i++) {
+        PCB *p = &g_state.processes[i];
+        if (p->state == TERMINATED) {
+            waiting += p->waiting_time;
+            turnaround += p->turnaround_time;
+            terminated++;
+            if (p->first_run_tick >= 0) {
+                response += p->first_run_tick - p->arrival_tick;
+                responded++;
+            }
+        }
+    }
 
     fprintf(f, "╔══════════════════════════════════════════╗\n");
     fprintf(f, "║       EXAM OS SIMULATION REPORT          ║\n");
     fprintf(f, "╠══════════════════════════════════════════╣\n");
     fprintf(f, "║ CPU                                      ║\n");
     fprintf(f, "║   Context Switches  : %-18d ║\n", g_state.context_switches);
+    fprintf(f, "║   Dispatches        : %-18d ║\n", g_state.dispatches);
+    fprintf(f, "║   Avg Waiting Time  : %-18.1f ║\n",
+            terminated > 0 ? waiting / terminated : 0.0);
+    fprintf(f, "║   Avg Turnaround    : %-18.1f ║\n",
+            terminated > 0 ? turnaround / terminated : 0.0);
+    fprintf(f, "║   Avg Response      : %-18.1f ║\n",
+            responded > 0 ? response / responded : 0.0);
     fprintf(f, "║   Completed Exams   : %-18d ║\n", g_state.finished_ok);
     fprintf(f, "║   Timeouts Fired    : %-18d ║\n", g_state.timeouts_fired);
     fprintf(f, "╠══════════════════════════════════════════╣\n");

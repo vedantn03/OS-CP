@@ -48,6 +48,18 @@ if grep -o "PID [0-9]* terminated" output/system_log.txt | sort | uniq -d | grep
     fail T9 "duplicate termination log found"
 fi
 pass T9
+
+for ALGO in RR PRIORITY
+do
+    "$BIN" --headless --students 20 --duration 100 --algo "$ALGO" --seed 3 >"$TMP/$ALGO.out" 2>&1 ||
+        fail T10 "$ALGO run failed"
+    dispatches=$(grep 'Dispatches' output/summary.txt | sed 's/.*: *//; s/[^0-9].*//')
+    switches=$(grep 'Context Switches' output/summary.txt | sed 's/.*: *//; s/[^0-9].*//')
+    [ "$dispatches" -gt 0 ] || fail T10 "$ALGO had no dispatches"
+    [ "$dispatches" -ge "$switches" ] || fail T10 "$ALGO dispatch/switch count invalid"
+done
+pass T10
+
 make clean >/dev/null
 pass T8
-printf 'All T1-T9 tests passed.\n'
+printf 'All T1-T10 tests passed.\n'
