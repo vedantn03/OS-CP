@@ -27,7 +27,9 @@ void logger_init() {
 }
 
 void logger_shutdown() {
+    pthread_mutex_lock(&q_lock);
     logger_running = 0;
+    pthread_mutex_unlock(&q_lock);
     sem_post(&q_ready);  // wake thread so it can exit
 }
 
@@ -65,9 +67,13 @@ void *logger_thread(void *arg) {
     while (1) {
         sem_wait(&q_ready);
 
-        if (!logger_running && q_count == 0) break;
-
         pthread_mutex_lock(&q_lock);
+
+        if (!logger_running && q_count == 0) {
+            pthread_mutex_unlock(&q_lock);
+            break;
+        }
+
         if (q_count == 0) {
             pthread_mutex_unlock(&q_lock);
             continue;
@@ -76,6 +82,7 @@ void *logger_thread(void *arg) {
         LogEntry e = log_queue[q_head];
         q_head = (q_head + 1) % MAX_LOG_QUEUE;
         q_count--;
+
         pthread_mutex_unlock(&q_lock);
 
         // Write to file
