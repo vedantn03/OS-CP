@@ -1,0 +1,1 @@
+-bash: ./exam_os_tsan: No such file or directory
