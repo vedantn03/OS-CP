@@ -36,3 +36,9 @@ test:
 	sh tests/run_tests.sh
 
 .PHONY: all clean run demo headless test
+tsan: exam_os_tsan
+
+exam_os_tsan: $(SRC)
+	$(CC) $(CFLAGS) -fsanitize=thread -g -O1 -fno-omit-frame-pointer -o $@ $(SRC) $(LDFLAGS) -fsanitize=thread -g -O1 -fno-omit-frame-pointer
+
+.PHONY: tsan
