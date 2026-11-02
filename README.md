@@ -91,6 +91,9 @@ make
 # Normal run with config.conf settings
 ./exam_os
 
+# Headless run — no ncurses dashboard (useful for CI and servers)
+./exam_os --headless
+
 # Demo mode — triggers submission storm at tick 30
 ./exam_os --demo
 
@@ -113,9 +116,11 @@ Edit `config.conf` before running, or override with CLI flags:
 | Memory frames | `MEMORY_FRAMES` | `--frames N` | 64 |
 | Time quantum (ticks) | `TIME_QUANTUM` | `--quantum N` | 5 |
 | Exam duration (ticks) | `EXAM_DURATION` | `--duration N` | 100 |
+| I/O buffer capacity | `BUFFER_CAPACITY` | `--buffer N` | 256 |
 | Scheduling algorithm | `SCHEDULING_ALGO` | `--algo PRIORITY\|RR` | PRIORITY |
 | Page replacement | `PAGE_REPLACE` | `--page LRU\|FIFO` | LRU |
 | Demo mode | — | `--demo` | off |
+| Headless mode | — | `--headless` | off |
 
 ---
 

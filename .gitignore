@@ -1,0 +1,15 @@
+# Build artifacts
+exam_os/exam_os
+exam_os/*.o
+exam_os/src/*.o
+
+# Generated runtime output
+exam_os/output/*.txt
+exam_os/output/*.json
+
+# Local tooling and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.log
