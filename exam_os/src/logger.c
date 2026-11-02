@@ -138,6 +138,8 @@ void logger_write_report() {
     fprintf(f, "║       EXAM OS SIMULATION REPORT          ║\n");
     fprintf(f, "╠══════════════════════════════════════════╣\n");
     fprintf(f, "║ CPU                                      ║\n");
+    fprintf(f, "║   Busy Ticks        : %-18d ║\n", g_state.cpu_busy_ticks);
+    fprintf(f, "║   Idle Ticks        : %-18d ║\n", g_state.cpu_idle_ticks);
     fprintf(f, "║   Context Switches  : %-18d ║\n", g_state.context_switches);
     fprintf(f, "║   Dispatches        : %-18d ║\n", g_state.dispatches);
     fprintf(f, "║   Avg Waiting Time  : %-18.1f ║\n",
@@ -156,7 +158,11 @@ void logger_write_report() {
     fprintf(f, "║   Hit Rate          : %-17.1f%% ║\n", hit_rate);
     fprintf(f, "╠══════════════════════════════════════════╣\n");
     fprintf(f, "║ I/O BUFFER                               ║\n");
+    fprintf(f, "║   Workload Mode     : %-18s ║\n",
+            g_config.workload_mode == WORKLOAD_INTERACTIVE ? "INTERACTIVE" : "LEGACY");
     fprintf(f, "║   Total Submissions : %-18d ║\n", g_state.total_submissions);
+    fprintf(f, "║   Scheduler-Owned   : %-18d ║\n", g_state.scheduler_submissions);
+    fprintf(f, "║   Wakeups           : %-18d ║\n", g_state.wakeups);
     fprintf(f, "║   Dropped           : %-18d ║\n", g_state.dropped_submissions);
     fprintf(f, "║   Flush Count       : %-18d ║\n", g_state.flush_count);
     fprintf(f, "║   Throttled Submissions: %-14d ║\n", g_state.throttled_submissions);

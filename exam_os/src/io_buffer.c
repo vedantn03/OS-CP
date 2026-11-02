@@ -191,21 +191,23 @@ void *io_buffer_thread(void *arg) {
             storm_triggered = 1;
         }
 
-        // Simulate random submissions from active processes
+        // Simulate random submissions from active processes for LEGACY workload
         pthread_mutex_lock(&g_state.lock);
         int pid     = g_state.running_pid;
         int prcount = g_state.process_count;
         int backpressure_until = g_state.backpressure_until_tick;
         pthread_mutex_unlock(&g_state.lock);
 
-        if (pid > 0 && prcount > 0 && tick >= backpressure_until) {
+        if (g_config.workload_mode == WORKLOAD_LEGACY &&
+            pid > 0 && prcount > 0 && tick >= backpressure_until) {
             // 30% chance a process submits an answer each tick
             if (rng_uniform(100) < 30) {
                 char answer[64];
                 snprintf(answer, sizeof(answer), "ANS_%d", rng_uniform(1000));
                 io_buffer_submit(pid, rng_uniform(10) + 1, answer, 0);
             }
-        } else if (pid > 0 && prcount > 0 && tick < backpressure_until && !g_config.demo_mode) {
+        } else if (pid > 0 && prcount > 0 &&
+                   tick < backpressure_until && !g_config.demo_mode) {
             pthread_mutex_lock(&g_state.lock);
             g_state.throttled_submissions++;
             pthread_mutex_unlock(&g_state.lock);
@@ -221,7 +223,7 @@ void *io_buffer_thread(void *arg) {
             last_flush_tick = tick;
         }
 
-        usleep(TIME_TICK_MS * 1000);
+        usleep(g_config.tick_ms * 1000);
     }
 
     if (disk_file && disk_file != stderr) fclose(disk_file);

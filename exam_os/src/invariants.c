@@ -25,6 +25,12 @@ int invariants_run(void) {
     int finished_ok;
     int timeouts_fired;
     int process_count;
+    int current_tick;
+    int cpu_busy_ticks;
+    int cpu_idle_ticks;
+    int running_pid;
+    int wakeups;
+    int scheduler_submissions;
     PCB processes[MAX_STUDENTS];
     int io_count;
 
@@ -45,6 +51,12 @@ int invariants_run(void) {
     finished_ok = g_state.finished_ok;
     timeouts_fired = g_state.timeouts_fired;
     process_count = g_state.process_count;
+    current_tick = g_state.current_tick;
+    cpu_busy_ticks = g_state.cpu_busy_ticks;
+    cpu_idle_ticks = g_state.cpu_idle_ticks;
+    running_pid = g_state.running_pid;
+    wakeups = g_state.wakeups;
+    scheduler_submissions = g_state.scheduler_submissions;
     memcpy(processes, g_state.processes, sizeof(processes));
     pthread_mutex_unlock(&g_state.lock);
 
@@ -81,6 +93,39 @@ int invariants_run(void) {
 
     snprintf(msg, sizeof(msg), "buffer=%d capacity=%d", io_count, g_io_buffer.capacity);
     report_check("I6", io_count >= 0 && io_count <= g_config.buffer_capacity, msg);
+
+    snprintf(msg, sizeof(msg), "busy=%d idle=%d ticks=%d",
+             cpu_busy_ticks, cpu_idle_ticks, current_tick);
+    report_check("I7",
+                 cpu_busy_ticks >= 0 &&
+                 cpu_idle_ticks >= 0 &&
+                 cpu_busy_ticks + cpu_idle_ticks == current_tick,
+                 msg);
+
+    int running_count = 0;
+    int running_match = 0;
+    for (int i = 0; i < process_count; i++) {
+        if (processes[i].state == RUNNING) {
+            running_count++;
+            if (processes[i].pid == running_pid)
+                running_match = 1;
+        }
+    }
+    snprintf(msg, sizeof(msg), "running_pid=%d running_count=%d",
+             running_pid, running_count);
+    report_check("I8",
+                 (running_pid <= 0 && running_count == 0) ||
+                 (running_pid > 0 && running_count == 1 && running_match),
+                 msg);
+
+    snprintf(msg, sizeof(msg), "wakeups=%d scheduler_submissions=%d total=%d",
+             wakeups, scheduler_submissions, total_submissions);
+    report_check("I9",
+                 wakeups >= 0 &&
+                 scheduler_submissions >= 0 &&
+                 wakeups <= scheduler_submissions &&
+                 scheduler_submissions <= total_submissions,
+                 msg);
 
     if (invariant_file) fclose(invariant_file);
     invariant_file = NULL;

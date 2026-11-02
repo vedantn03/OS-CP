@@ -13,7 +13,7 @@
 #define MAX_BUFFER_CAPACITY     4096
 #define MAX_LOG_QUEUE    512
 #define MAX_INTERRUPTS   8
-#define TIME_TICK_MS     100
+#define DEFAULT_TICK_MS  100
 #define BACKPRESSURE_TICKS 5
 
 // ─── Enums ───────────────────────────────────────────────
@@ -28,6 +28,11 @@ typedef enum {
 typedef enum {
     LRU, FIFO
 } PageAlgo;
+
+typedef enum {
+    WORKLOAD_LEGACY,
+    WORKLOAD_INTERACTIVE
+} WorkloadMode;
 
 // ─── Process Control Block ───────────────────────────────
 typedef struct {
@@ -47,6 +52,9 @@ typedef struct {
     int          timeout_pending;
     int          timed_out;
     int          cpu_ticks;
+    int          quantum_remaining;
+    int          cpu_burst_remaining;
+    int          io_wait_until_tick;
 } PCB;
 
 // ─── Page Table Entry ────────────────────────────────────
@@ -92,6 +100,8 @@ typedef struct {
     int       session_limit;
     int       arrival_batch;
     int       arrival_interval;
+    int       tick_ms;
+    WorkloadMode workload_mode;
     int       strict;
 } Config;
 
@@ -100,6 +110,8 @@ typedef struct {
     // CPU
     int   running_pid;
     float cpu_utilization;
+    int   cpu_busy_ticks;
+    int   cpu_idle_ticks;
     int   context_switches;
     int   dispatches;
     int   completed_processes;
@@ -109,6 +121,8 @@ typedef struct {
     int   backpressure_until_tick;
     int   throttled_submissions;
     int   dropped_interrupts;
+    int   wakeups;
+    int   scheduler_submissions;
 
     // Memory
     int   page_faults;

@@ -300,7 +300,7 @@ void *memory_thread(void *arg) {
             }
         }
 
-        usleep(TIME_TICK_MS * 1000);
+        usleep(g_config.tick_ms * 1000);
     }
 
     log_event("INFO", "MEMORY", "Memory thread exiting");

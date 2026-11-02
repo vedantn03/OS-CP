@@ -20,6 +20,8 @@ void config_load_defaults(Config *cfg) {
     cfg->session_limit   = 0;
     cfg->arrival_batch   = 5;
     cfg->arrival_interval = 10;
+    cfg->tick_ms         = DEFAULT_TICK_MS;
+    cfg->workload_mode   = WORKLOAD_LEGACY;
     cfg->strict          = 0;
 }
 
@@ -44,10 +46,15 @@ int config_parse_file(Config *cfg, const char *filepath) {
         else if (strcmp(key, "SESSION_LIMIT")    == 0 && numeric) cfg->session_limit   = (int)number;
         else if (strcmp(key, "ARRIVAL_BATCH")    == 0 && numeric) cfg->arrival_batch   = (int)number;
         else if (strcmp(key, "ARRIVAL_INTERVAL") == 0 && numeric) cfg->arrival_interval = (int)number;
+        else if ((strcmp(key, "TIME_TICK_MS")    == 0 || strcmp(key, "TICK_MS") == 0) && numeric)
+            cfg->tick_ms = (int)number;
         else if (strcmp(key, "SCHEDULING_ALGO")  == 0)
             cfg->sched_algo = (strcmp(val, "ROUND_ROBIN") == 0) ? ROUND_ROBIN : PRIORITY;
         else if (strcmp(key, "PAGE_REPLACE")     == 0)
             cfg->page_algo  = (strcmp(val, "FIFO") == 0) ? FIFO : LRU;
+        else if (strcmp(key, "WORKLOAD_MODE") == 0)
+            cfg->workload_mode =
+                (strcmp(val, "INTERACTIVE") == 0) ? WORKLOAD_INTERACTIVE : WORKLOAD_LEGACY;
     }
 
     fclose(f);
@@ -64,10 +71,20 @@ int config_parse_args(Config *cfg, int argc, char *argv[]) {
         else if (strcmp(argv[i], "--limit")   == 0 && i+1 < argc) cfg->session_limit   = atoi(argv[++i]);
         else if (strcmp(argv[i], "--arrival-batch") == 0 && i+1 < argc) cfg->arrival_batch = atoi(argv[++i]);
         else if (strcmp(argv[i], "--arrival-interval") == 0 && i+1 < argc) cfg->arrival_interval = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--tick-ms") == 0 && i+1 < argc) cfg->tick_ms = atoi(argv[++i]);
         else if (strcmp(argv[i], "--algo")     == 0 && i+1 < argc)
             cfg->sched_algo = (strcmp(argv[++i], "RR") == 0) ? ROUND_ROBIN : PRIORITY;
         else if (strcmp(argv[i], "--page")     == 0 && i+1 < argc)
             cfg->page_algo  = (strcmp(argv[++i], "FIFO") == 0) ? FIFO : LRU;
+        else if (strcmp(argv[i], "--workload") == 0 && i+1 < argc) {
+            const char *mode = argv[++i];
+            if (strcmp(mode, "INTERACTIVE") == 0) cfg->workload_mode = WORKLOAD_INTERACTIVE;
+            else if (strcmp(mode, "LEGACY") == 0) cfg->workload_mode = WORKLOAD_LEGACY;
+            else {
+                fprintf(stderr, "ERROR: Invalid workload mode: %s (use LEGACY or INTERACTIVE)\n", mode);
+                return 0;
+            }
+        }
         else if (strcmp(argv[i], "--demo")     == 0) cfg->demo_mode = 1;
         else if (strcmp(argv[i], "--headless") == 0) cfg->headless_mode = 1;
         else if (strcmp(argv[i], "--strict")   == 0) cfg->strict = 1;
@@ -81,6 +98,8 @@ int config_parse_args(Config *cfg, int argc, char *argv[]) {
             printf("  --limit N      Per-session time limit in ticks (0 uses initial remaining time)\n");
             printf("  --arrival-batch N    Processes added per arrival batch\n");
             printf("  --arrival-interval N Ticks between arrival batches\n");
+            printf("  --tick-ms N    Real time for one simulation tick in milliseconds\n");
+            printf("  --workload LEGACY|INTERACTIVE\n");
             printf("  --buffer N     I/O buffer capacity\n");
             printf("  --algo RR|PRIORITY  Scheduling algorithm\n");
             printf("  --page FIFO|LRU     Page replacement algorithm\n");
@@ -117,6 +136,8 @@ int config_validate(const Config *cfg, char *error, size_t error_size) {
         snprintf(error, error_size, "ARRIVAL_BATCH must be at least 1");
     else if (cfg->arrival_interval < 1)
         snprintf(error, error_size, "ARRIVAL_INTERVAL must be at least 1");
+    else if (cfg->tick_ms < 1 || cfg->tick_ms > 60000)
+        snprintf(error, error_size, "TICK_MS must be 1..60000");
     else
         return 1;
     return 0;
@@ -131,9 +152,12 @@ void config_print(Config *cfg) {
     printf("│ Session Limit: %-26d │\n", cfg->session_limit);
     printf("│ Arrival Batch: %-26d │\n", cfg->arrival_batch);
     printf("│ Arrival Every: %-26d │\n", cfg->arrival_interval);
+    printf("│ Tick (ms)    : %-26d │\n", cfg->tick_ms);
     printf("│ Buffer       : %-26d │\n", cfg->buffer_capacity);
     printf("│ Scheduling   : %-26s │\n", cfg->sched_algo == PRIORITY ? "PRIORITY" : "ROUND_ROBIN");
     printf("│ Page Replace : %-26s │\n", cfg->page_algo  == LRU      ? "LRU"      : "FIFO");
+    printf("│ Workload     : %-26s │\n",
+           cfg->workload_mode == WORKLOAD_INTERACTIVE ? "INTERACTIVE" : "LEGACY");
     printf("│ Demo Mode    : %-26s │\n", cfg->demo_mode  ? "ON" : "OFF");
     printf("│ Headless     : %-26s │\n", cfg->headless_mode ? "ON" : "OFF");
     printf("└─────────────────────────────────────────┘\n");
