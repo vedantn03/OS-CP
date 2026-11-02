@@ -6,6 +6,7 @@ SRC = src/main.c \
       src/config.c \
       src/logger.c \
       src/scheduler.c \
+      src/process.c \
       src/memory.c \
       src/io_buffer.c \
       src/interrupt.c \

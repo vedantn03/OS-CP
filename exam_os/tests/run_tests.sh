@@ -41,6 +41,13 @@ grep -q "Hit Rate" output/summary.txt || fail T7 "summary metrics missing"
 grep -q "EXAM OS SIMULATION LOG" output/system_log.txt || fail T7 "log header missing"
 pass T7
 
+"$BIN" --headless --students 10 --duration 80 --limit 10 --seed 1 >"$TMP/timeout.out" 2>&1 || fail T9 "timeout run failed"
+grep -Eq 'Timeouts Fired[[:space:]]*:[[:space:]]*[1-9][0-9]*' output/summary.txt || fail T9 "no timeout was fired"
+grep -q "\[PARTIAL\]" output/submissions.txt || fail T9 "partial submission missing"
+if grep -o "PID [0-9]* terminated" output/system_log.txt | sort | uniq -d | grep -q .; then
+    fail T9 "duplicate termination log found"
+fi
+pass T9
 make clean >/dev/null
 pass T8
-printf 'All T1-T8 tests passed.\n'
+printf 'All T1-T9 tests passed.\n'

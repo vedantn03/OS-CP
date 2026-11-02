@@ -17,6 +17,7 @@ void config_load_defaults(Config *cfg) {
     cfg->demo_mode       = 0;
     cfg->headless_mode   = 0;
     cfg->random_seed     = 0;
+    cfg->session_limit   = 0;
 }
 
 int config_parse_file(Config *cfg, const char *filepath) {
@@ -37,6 +38,7 @@ int config_parse_file(Config *cfg, const char *filepath) {
         else if (strcmp(key, "TIME_QUANTUM")     == 0 && numeric) cfg->time_quantum    = (int)number;
         else if (strcmp(key, "EXAM_DURATION")    == 0 && numeric) cfg->exam_duration   = (int)number;
         else if (strcmp(key, "BUFFER_CAPACITY")  == 0 && numeric) cfg->buffer_capacity = (int)number;
+        else if (strcmp(key, "SESSION_LIMIT")    == 0 && numeric) cfg->session_limit   = (int)number;
         else if (strcmp(key, "SCHEDULING_ALGO")  == 0)
             cfg->sched_algo = (strcmp(val, "ROUND_ROBIN") == 0) ? ROUND_ROBIN : PRIORITY;
         else if (strcmp(key, "PAGE_REPLACE")     == 0)
@@ -54,6 +56,7 @@ int config_parse_args(Config *cfg, int argc, char *argv[]) {
         else if (strcmp(argv[i], "--quantum")  == 0 && i+1 < argc) cfg->time_quantum  = atoi(argv[++i]);
         else if (strcmp(argv[i], "--duration") == 0 && i+1 < argc) cfg->exam_duration = atoi(argv[++i]);
         else if (strcmp(argv[i], "--buffer")  == 0 && i+1 < argc) cfg->buffer_capacity = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--limit")   == 0 && i+1 < argc) cfg->session_limit   = atoi(argv[++i]);
         else if (strcmp(argv[i], "--algo")     == 0 && i+1 < argc)
             cfg->sched_algo = (strcmp(argv[++i], "RR") == 0) ? ROUND_ROBIN : PRIORITY;
         else if (strcmp(argv[i], "--page")     == 0 && i+1 < argc)
@@ -61,6 +64,21 @@ int config_parse_args(Config *cfg, int argc, char *argv[]) {
         else if (strcmp(argv[i], "--demo")     == 0) cfg->demo_mode = 1;
         else if (strcmp(argv[i], "--headless") == 0) cfg->headless_mode = 1;
         else if (strcmp(argv[i], "--seed")    == 0 && i+1 < argc) cfg->random_seed = (unsigned int)strtoul(argv[++i], NULL, 10);
+        else if (strcmp(argv[i], "--help")   == 0) {
+            printf("Usage: ./exam_os [options]\n");
+            printf("  --students N   Number of students\n");
+            printf("  --frames N     Number of memory frames\n");
+            printf("  --quantum N    Scheduler quantum\n");
+            printf("  --duration N   Simulation duration in ticks\n");
+            printf("  --limit N      Per-session time limit in ticks (0 uses initial remaining time)\n");
+            printf("  --buffer N     I/O buffer capacity\n");
+            printf("  --algo RR|PRIORITY  Scheduling algorithm\n");
+            printf("  --page FIFO|LRU     Page replacement algorithm\n");
+            printf("  --headless      Disable dashboard\n");
+            printf("  --demo          Enable demo mode\n");
+            printf("  --seed N        Random seed\n");
+            exit(EXIT_SUCCESS);
+        }
         else {
             fprintf(stderr, "ERROR: Unknown or incomplete argument: %s\n", argv[i]);
             return 0;
@@ -82,6 +100,8 @@ int config_validate(const Config *cfg, char *error, size_t error_size) {
         snprintf(error, error_size, "EXAM_DURATION must be positive");
     else if (cfg->buffer_capacity < 1 || cfg->buffer_capacity > MAX_BUFFER_CAPACITY)
         snprintf(error, error_size, "BUFFER_CAPACITY must be 1..%d", MAX_BUFFER_CAPACITY);
+    else if (cfg->session_limit < 0 || cfg->session_limit > 100000)
+        snprintf(error, error_size, "SESSION_LIMIT must be 0..100000");
     else
         return 1;
     return 0;
@@ -93,6 +113,7 @@ void config_print(Config *cfg) {
     printf("│ Memory Frames: %-26d │\n", cfg->memory_frames);
     printf("│ Time Quantum : %-26d │\n", cfg->time_quantum);
     printf("│ Exam Duration: %-26d │\n", cfg->exam_duration);
+    printf("│ Session Limit: %-26d │\n", cfg->session_limit);
     printf("│ Buffer       : %-26d │\n", cfg->buffer_capacity);
     printf("│ Scheduling   : %-26s │\n", cfg->sched_algo == PRIORITY ? "PRIORITY" : "ROUND_ROBIN");
     printf("│ Page Replace : %-26s │\n", cfg->page_algo  == LRU      ? "LRU"      : "FIFO");

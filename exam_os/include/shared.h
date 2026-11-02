@@ -38,6 +38,14 @@ typedef struct {
     int          waiting_time;
     int          turnaround_time;
     int          pages_used;
+    int          arrival_tick;
+    int          first_run_tick;
+    int          finish_tick;
+    int          deadline_tick;
+    int          last_ready_tick;
+    int          timeout_pending;
+    int          timed_out;
+    int          cpu_ticks;
 } PCB;
 
 // ─── Page Table Entry ────────────────────────────────────
@@ -80,6 +88,7 @@ typedef struct {
     int       demo_mode;
     int       headless_mode;
     unsigned int random_seed;
+    int       session_limit;
 } Config;
 
 // ─── System State (shared across all modules) ────────────
@@ -89,6 +98,7 @@ typedef struct {
     float cpu_utilization;
     int   context_switches;
     int   completed_processes;
+    int   finished_ok;
 
     // Memory
     int   page_faults;

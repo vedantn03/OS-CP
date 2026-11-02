@@ -7,6 +7,7 @@
 #include "logger.h"
 #include "clock.h"
 #include "rng.h"
+#include "process.h"
 
 // ─── Physical frame pool ──────────────────────────────────
 typedef struct {
@@ -98,7 +99,7 @@ static void load_page(int pid, int virtual_page, int frame) {
             char msg[128];
             snprintf(msg, sizeof(msg),
                      "Dirty eviction: PID %d page %d → disk write",
-                     prev_pid, prev_page);
+                     prev_pid + 1, prev_page);
             log_event("WARN", "MEMORY", msg);
             page_tables[prev_pid][prev_page].dirty = 0;
         }
@@ -121,12 +122,13 @@ static void load_page(int pid, int virtual_page, int frame) {
 
 // ─── Core memory access (called per tick per running process)
 int memory_access(int pid, int virtual_page) {
-    if (pid < 0 || pid >= MAX_STUDENTS) return -1;
+    int slot = process_slot(pid);
+    if (slot < 0) return -1;
     if (virtual_page < 0 || virtual_page >= MAX_PAGES) return -1;
 
     pthread_mutex_lock(&mem_lock);
 
-    PageTableEntry *entry = &page_tables[pid][virtual_page];
+    PageTableEntry *entry = &page_tables[slot][virtual_page];
 
     if (entry->valid) {
         // PAGE HIT
@@ -160,7 +162,7 @@ int memory_access(int pid, int virtual_page) {
         log_event("INFO", "MEMORY", msg);
     }
 
-    load_page(pid, virtual_page, frame);
+    load_page(slot, virtual_page, frame);
 
     // Update frames_used in shared state
     pthread_mutex_lock(&g_state.lock);
@@ -176,13 +178,15 @@ int memory_access(int pid, int virtual_page) {
 
 // ─── Free all frames owned by a process ──────────────────
 void memory_free_process(int pid) {
+    int slot = process_slot(pid);
+    if (slot < 0) return;
     pthread_mutex_lock(&mem_lock);
 
     for (int i = 0; i < total_frames; i++) {
-        if (frame_pool[i].pid == pid) {
+        if (frame_pool[i].pid == slot) {
             int vp = frame_pool[i].virtual_page;
-            page_tables[pid][vp].valid        = 0;
-            page_tables[pid][vp].frame_number = -1;
+            page_tables[slot][vp].valid        = 0;
+            page_tables[slot][vp].frame_number = -1;
             frame_pool[i].pid                 = -1;
             frame_pool[i].virtual_page        = -1;
         }
@@ -222,7 +226,7 @@ void *memory_thread(void *arg) {
             int accesses = 1 + rng_uniform(3);
             for (int i = 0; i < accesses; i++) {
                 int vpage = rng_uniform(8); // working set of 8 pages per process
-                memory_access(curr_pid - 1, vpage);
+                memory_access(curr_pid, vpage);
             }
         }
 

@@ -10,6 +10,7 @@
 #include "memory.h"
 #include "io_buffer.h"
 #include "clock.h"
+#include "process.h"
 
 // ─── Interrupt Vector Table ───────────────────────────────
 static IVTEntry ivt[MAX_INTERRUPTS];
@@ -35,6 +36,14 @@ static sem_t           int_ready;
 
 // Handler 0: Exam timeout — save partial, terminate process
 static void handle_exam_timeout(int pid, SystemState *state) {
+    if (!process_terminate(pid, 1)) {
+        char ignored[96];
+        snprintf(ignored, sizeof(ignored),
+                 "Timeout ignored: PID %d already terminated", pid);
+        log_event("INFO", "INTERRUPT", ignored);
+        return;
+    }
+
     char msg[128];
     snprintf(msg, sizeof(msg), "TIMEOUT: PID %d exam expired — saving partial submission", pid);
     log_event("WARN", "INTERRUPT", msg);
@@ -43,12 +52,6 @@ static void handle_exam_timeout(int pid, SystemState *state) {
     char answer[64];
     snprintf(answer, sizeof(answer), "PARTIAL_PID%d", pid);
     io_buffer_submit(pid, 0, answer, 1);
-
-    // Free memory pages
-    memory_free_process(pid - 1);
-
-    // Terminate the process
-    scheduler_terminate_process(pid);
 
     pthread_mutex_lock(&state->lock);
     state->timeouts_fired++;
@@ -164,24 +167,25 @@ static void check_overload() {
 
 // ─── Check for process timeouts ───────────────────────────
 static void check_timeouts() {
+    int expired[MAX_STUDENTS];
+    int expired_count = 0;
+
     pthread_mutex_lock(&g_state.lock);
 
     for (int i = 0; i < g_state.process_count; i++) {
         PCB *p = &g_state.processes[i];
-        if (p->state == RUNNING || p->state == READY) {
-            p->remaining_time--;
-            if (p->remaining_time <= 0) {
-                // Raise timeout interrupt — handled asynchronously
-                int pid = p->pid;
-                p->state = TERMINATED;
-                pthread_mutex_unlock(&g_state.lock);
-                interrupt_raise(INT_EXAM_TIMEOUT, pid);
-                pthread_mutex_lock(&g_state.lock);
-            }
+        if ((p->state == READY || p->state == RUNNING || p->state == WAITING) &&
+            g_state.current_tick >= p->deadline_tick &&
+            p->timeout_pending == 0) {
+            p->timeout_pending = 1;
+            expired[expired_count++] = p->pid;
         }
     }
 
     pthread_mutex_unlock(&g_state.lock);
+
+    for (int i = 0; i < expired_count; i++)
+        interrupt_raise(INT_EXAM_TIMEOUT, expired[i]);
 }
 
 // ─── Interrupt thread: monitors system + dispatches ───────

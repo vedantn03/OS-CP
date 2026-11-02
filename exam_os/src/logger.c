@@ -113,7 +113,7 @@ void logger_write_report() {
     fprintf(f, "╠══════════════════════════════════════════╣\n");
     fprintf(f, "║ CPU                                      ║\n");
     fprintf(f, "║   Context Switches  : %-18d ║\n", g_state.context_switches);
-    fprintf(f, "║   Completed Exams   : %-18d ║\n", g_state.completed_processes);
+    fprintf(f, "║   Completed Exams   : %-18d ║\n", g_state.finished_ok);
     fprintf(f, "║   Timeouts Fired    : %-18d ║\n", g_state.timeouts_fired);
     fprintf(f, "╠══════════════════════════════════════════╣\n");
     fprintf(f, "║ MEMORY                                   ║\n");

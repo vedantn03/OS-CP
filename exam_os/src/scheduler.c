@@ -5,6 +5,7 @@
 #include "scheduler.h"
 #include "logger.h"
 #include "rng.h"
+#include "process.h"
 
 // ─── Ready Queue (min-heap by priority) ──────────────────
 static PCB  ready_queue[MAX_STUDENTS];
@@ -59,10 +60,36 @@ void scheduler_init() {
 
 void scheduler_add_process(PCB process) {
     pthread_mutex_lock(&rq_lock);
-    process.state = READY;
-
-    // Add to global state process list
     pthread_mutex_lock(&g_state.lock);
+    if (g_state.process_count >= MAX_STUDENTS || rq_size >= MAX_STUDENTS) {
+        pthread_mutex_unlock(&g_state.lock);
+        pthread_mutex_unlock(&rq_lock);
+        log_event("WARN", "SCHEDULER", "Cannot add process: process or ready queue full");
+        return;
+    }
+    if (process.pid != g_state.process_count + 1) {
+        pthread_mutex_unlock(&g_state.lock);
+        pthread_mutex_unlock(&rq_lock);
+        log_event("ERROR", "SCHEDULER", "Cannot add process: PID does not match slot");
+        return;
+    }
+
+    int now = g_state.current_tick;
+    process.arrival_tick = now;
+    process.first_run_tick = -1;
+    process.finish_tick = -1;
+    process.last_ready_tick = now;
+    process.timeout_pending = 0;
+    process.timed_out = 0;
+    process.cpu_ticks = 0;
+    process.deadline_tick = now +
+        (g_config.session_limit > 0 ? g_config.session_limit : process.remaining_time);
+    if (process_set_state(&process, READY) != 0) {
+        pthread_mutex_unlock(&g_state.lock);
+        pthread_mutex_unlock(&rq_lock);
+        log_event("ERROR", "SCHEDULER", "Cannot add process: invalid initial state");
+        return;
+    }
     g_state.processes[g_state.process_count++] = process;
     pthread_mutex_unlock(&g_state.lock);
 
@@ -76,19 +103,7 @@ void scheduler_add_process(PCB process) {
 }
 
 void scheduler_terminate_process(int pid) {
-    pthread_mutex_lock(&g_state.lock);
-    for (int i = 0; i < g_state.process_count; i++) {
-        if (g_state.processes[i].pid == pid) {
-            g_state.processes[i].state = TERMINATED;
-            g_state.completed_processes++;
-            break;
-        }
-    }
-    pthread_mutex_unlock(&g_state.lock);
-
-    char msg[64];
-    snprintf(msg, sizeof(msg), "PID %d terminated", pid);
-    log_event("INFO", "SCHEDULER", msg);
+    process_terminate(pid, 0);
 }
 
 // ─── Round Robin scheduling ───────────────────────────────
@@ -110,6 +125,12 @@ static void run_round_robin() {
 
     // Simulate running for one quantum
     pthread_mutex_lock(&g_state.lock);
+    int slot = process_slot(current.pid);
+    if (slot >= 0 && g_state.processes[slot].state == READY) {
+        process_set_state(&g_state.processes[slot], RUNNING);
+        if (g_state.processes[slot].first_run_tick < 0)
+            g_state.processes[slot].first_run_tick = g_state.current_tick;
+    }
     g_state.running_pid     = current.pid;
     g_state.cpu_utilization = 100.0f * rq_size / (rq_size + 1);
     g_state.context_switches++;
@@ -120,6 +141,13 @@ static void run_round_robin() {
     if (rq_size > 0) {
         int idx = rr_index % rq_size;
         ready_queue[idx].remaining_time -= g_config.time_quantum;
+        pthread_mutex_lock(&g_state.lock);
+        int slot = process_slot(ready_queue[idx].pid);
+        if (slot >= 0) {
+            g_state.processes[slot].remaining_time = ready_queue[idx].remaining_time;
+            g_state.processes[slot].cpu_ticks += g_config.time_quantum;
+        }
+        pthread_mutex_unlock(&g_state.lock);
 
         if (ready_queue[idx].remaining_time <= 0) {
             // Process finished naturally
@@ -131,6 +159,12 @@ static void run_round_robin() {
             snprintf(msg, sizeof(msg), "PID %d completed exam (RR)", done.pid);
             log_event("INFO", "SCHEDULER", msg);
         } else {
+            pthread_mutex_lock(&g_state.lock);
+            if (slot >= 0 && g_state.processes[slot].state == RUNNING) {
+                process_set_state(&g_state.processes[slot], READY);
+                g_state.processes[slot].last_ready_tick = g_state.current_tick;
+            }
+            pthread_mutex_unlock(&g_state.lock);
             rr_index = (rr_index + 1) % rq_size;
         }
     }
@@ -155,6 +189,12 @@ static void run_priority() {
 
     // Run it
     pthread_mutex_lock(&g_state.lock);
+    int slot = process_slot(current.pid);
+    if (slot >= 0 && g_state.processes[slot].state == READY) {
+        process_set_state(&g_state.processes[slot], RUNNING);
+        if (g_state.processes[slot].first_run_tick < 0)
+            g_state.processes[slot].first_run_tick = g_state.current_tick;
+    }
     g_state.running_pid     = current.pid;
     g_state.cpu_utilization = 100.0f * (g_config.num_students - g_state.completed_processes)
                               / g_config.num_students;
@@ -165,6 +205,12 @@ static void run_priority() {
     usleep(TIME_TICK_MS * 500);
 
     current.remaining_time -= g_config.time_quantum;
+    pthread_mutex_lock(&g_state.lock);
+    if (slot >= 0) {
+        g_state.processes[slot].remaining_time = current.remaining_time;
+        g_state.processes[slot].cpu_ticks += g_config.time_quantum;
+    }
+    pthread_mutex_unlock(&g_state.lock);
 
     if (current.remaining_time <= 0) {
         scheduler_terminate_process(current.pid);
@@ -173,6 +219,12 @@ static void run_priority() {
         snprintf(msg, sizeof(msg), "PID %d completed exam (PRIORITY)", current.pid);
         log_event("INFO", "SCHEDULER", msg);
     } else {
+        pthread_mutex_lock(&g_state.lock);
+        if (slot >= 0 && g_state.processes[slot].state == RUNNING) {
+            process_set_state(&g_state.processes[slot], READY);
+            g_state.processes[slot].last_ready_tick = g_state.current_tick;
+        }
+        pthread_mutex_unlock(&g_state.lock);
         // Put back in heap with updated time
         pthread_mutex_lock(&rq_lock);
         heap_push(current);
