@@ -129,6 +129,31 @@ pass T17
     fail T18 "legacy run failed"
 pass T18
 
+for ALGO in RR PRIORITY
+do
+    "$BIN" --headless --strict --tick-ms 10 --workload INTERACTIVE \
+        --students 12 --duration 300 --algo "$ALGO" --seed 21 >"$TMP/t19-$ALGO.out" 2>&1 ||
+        fail T19 "$ALGO waiting workload failed"
+    blocked=$(grep 'Blocked Waits' output/summary.txt | sed 's/.*: *//; s/[^0-9].*//')
+    wakeups=$(grep 'Wakeups' output/summary.txt | sed 's/.*: *//; s/[^0-9].*//')
+    completed=$(grep 'Completed Exams' output/summary.txt | sed 's/.*: *//; s/[^0-9].*//')
+    [ "$blocked" -gt 0 ] || fail T19 "$ALGO had no blocked waits"
+    [ "$wakeups" -gt 0 ] || fail T19 "$ALGO had no wakeups"
+    [ "$wakeups" -le "$blocked" ] || fail T19 "$ALGO wakeups exceeded blocked waits"
+    [ "$completed" -ge 10 ] || fail T19 "$ALGO completed fewer than 10 exams"
+done
+pass T19
+
+"$BIN" --headless --strict --tick-ms 10 --workload INTERACTIVE --limit 15 \
+    --students 12 --duration 300 --seed 21 >"$TMP/t20.out" 2>&1 ||
+    fail T20 "interactive timeout run failed"
+timeouts=$(grep 'Timeouts Fired' output/summary.txt | sed 's/.*: *//; s/[^0-9].*//')
+[ "$timeouts" -gt 0 ] || fail T20 "interactive timeout run had no timeouts"
+if grep -o "PID [0-9]* terminated" output/system_log.txt | sort | uniq -d | grep -q .; then
+    fail T20 "duplicate termination log found"
+fi
+pass T20
+
 make clean >/dev/null
 pass T8
-printf 'All T1-T18 tests passed.\n'
+printf 'All T1-T20 tests passed.\n'

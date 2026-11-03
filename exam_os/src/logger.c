@@ -150,6 +150,8 @@ void logger_write_report() {
                 ? (double)g_state.finished_ok * 100.0 / g_state.current_tick : 0.0);
     fprintf(f, "║   Unfinished At End : %-18d ║\n",
             g_state.process_count - g_state.completed_processes);
+    fprintf(f, "║   Blocked Waits     : %-18d ║\n", g_state.block_events);
+    fprintf(f, "║   Wakeups           : %-18d ║\n", g_state.wakeups);
     fprintf(f, "║   Avg Waiting Time  : %-18.1f ║\n",
             terminated > 0 ? waiting / terminated : 0.0);
     fprintf(f, "║   Avg Turnaround    : %-18.1f ║\n",

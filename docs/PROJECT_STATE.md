@@ -17,3 +17,5 @@ interactive workloads.
   invariants, and optional dispatch tracing.
 - 2026-11-03: Added configurable interactive CPU demand and completion
   submissions while preserving the legacy workload model.
+- 2026-11-03: Added interactive CPU burst/WAITING cycles, wakeups, and burst
+  submissions with timeout-safe sleeper handling.

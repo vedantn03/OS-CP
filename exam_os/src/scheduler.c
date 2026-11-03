@@ -143,21 +143,47 @@ static void rr_remove(int index) {
     if (rr_index >= rq_size) rr_index = 0;
 }
 
-static void wake_waiting_processes(int tick) {
+static int draw_burst(int remaining_time) {
+    int burst = g_config.burst_min +
+        rng_uniform(g_config.burst_max - g_config.burst_min + 1);
+    return remaining_time < burst ? remaining_time : burst;
+}
+
+static void enqueue_woken(int *slots, int count) {
     pthread_mutex_lock(&rq_lock);
     pthread_mutex_lock(&g_state.lock);
-    for (int slot = 0; slot < g_state.process_count; slot++) {
-        PCB *p = &g_state.processes[slot];
-        if (p->state == WAITING && tick >= p->wait_until_tick) {
-            if (process_set_state(p, READY) == 0) {
-                p->last_ready_tick = tick;
-                if (g_config.sched_algo == PRIORITY)
-                    heap_push(slot);
-            }
-        }
+    for (int i = 0; i < count; i++) {
+        int slot = slots[i];
+        if (slot < 0 || slot >= g_state.process_count ||
+            g_state.processes[slot].state != READY)
+            continue;
+        if (g_config.sched_algo == PRIORITY)
+            heap_push(slot);
+        else
+            ready_queue[rq_size++] = slot;
     }
     pthread_mutex_unlock(&g_state.lock);
     pthread_mutex_unlock(&rq_lock);
+}
+
+static void wake_sleepers(void) {
+    int slots[MAX_STUDENTS];
+    int count = 0;
+
+    pthread_mutex_lock(&g_state.lock);
+    int tick = g_state.current_tick;
+    for (int slot = 0; slot < g_state.process_count; slot++) {
+        PCB *p = &g_state.processes[slot];
+        if (p->state == WAITING && p->wake_tick <= tick &&
+            process_set_state(p, READY) == 0) {
+            p->last_ready_tick = tick;
+            p->burst_remaining = draw_burst(p->remaining_time);
+            g_state.wakeups++;
+            slots[count++] = slot;
+        }
+    }
+    pthread_mutex_unlock(&g_state.lock);
+    enqueue_woken(slots, count);
 }
 
 void scheduler_init(void) {
@@ -191,7 +217,11 @@ void scheduler_add_process(PCB process) {
     process.timeout_pending = 0;
     process.timed_out = 0;
     process.cpu_ticks = 0;
-    process.burst_remaining = 0;
+    if (g_config.workload == WORKLOAD_INTERACTIVE &&
+        process.burst_remaining <= 0)
+        process.burst_remaining = draw_burst(process.remaining_time);
+    else if (g_config.workload == WORKLOAD_LEGACY)
+        process.burst_remaining = 0;
     process.wake_tick = -1;
     process.bursts_done = 0;
     process.deadline_tick = now +
@@ -270,7 +300,7 @@ static void admit_arrivals(int *next_arrival_tick) {
     int tick = g_state.current_tick;
     pthread_mutex_unlock(&g_state.lock);
 
-    wake_waiting_processes(tick);
+    wake_sleepers();
     if (tick < *next_arrival_tick) return;
 
     pthread_mutex_lock(&g_state.lock);
@@ -291,6 +321,8 @@ static void admit_arrivals(int *next_arrival_tick) {
                 .total_time = g_config.workload == WORKLOAD_INTERACTIVE
                     ? demand : g_config.exam_duration,
                 .remaining_time = demand,
+                .burst_remaining = g_config.workload == WORKLOAD_INTERACTIVE
+                    ? draw_burst(demand) : 0,
                 .waiting_time = 0,
                 .turnaround_time = 0,
                 .pages_used = 0
@@ -347,6 +379,9 @@ static int dispatch_one(const char *algorithm, int *last_seen,
     tick_start = g_state.current_tick;
     work_left = g_config.time_quantum < p->remaining_time
         ? g_config.time_quantum : p->remaining_time;
+    if (g_config.workload == WORKLOAD_INTERACTIVE &&
+        work_left > p->burst_remaining)
+        work_left = p->burst_remaining;
     pthread_mutex_unlock(&g_state.lock);
 
     while (work_left > 0) {
@@ -361,6 +396,8 @@ static int dispatch_one(const char *algorithm, int *last_seen,
         } else {
             p->remaining_time -= step;
             p->cpu_ticks += step;
+            if (g_config.workload == WORKLOAD_INTERACTIVE)
+                p->burst_remaining -= step;
             work_left -= step;
             g_state.busy_ticks += step;
             g_state.idle_ticks += elapsed - step;
@@ -372,13 +409,35 @@ static int dispatch_one(const char *algorithm, int *last_seen,
     }
 
     int done = 0;
+    int blocked = 0;
+    int burst_number = 0;
+    int submit_burst = 0;
+    int backpressure = 0;
     pthread_mutex_lock(&g_state.lock);
     p = &g_state.processes[slot];
     if (!interrupted && p->state == RUNNING && p->remaining_time <= 0)
         done = 1;
     else if (!interrupted && p->state == RUNNING) {
-        process_set_state(p, READY);
-        p->last_ready_tick = g_state.current_tick;
+        if (g_config.workload == WORKLOAD_INTERACTIVE &&
+            p->burst_remaining <= 0) {
+            process_set_state(p, WAITING);
+            p->wake_tick = g_state.current_tick + g_config.think_min +
+                rng_uniform(g_config.think_max - g_config.think_min + 1);
+            p->bursts_done++;
+            burst_number = p->bursts_done;
+            g_state.block_events++;
+            g_state.running_pid = -1;
+            blocked = 1;
+            backpressure = g_state.current_tick <
+                g_state.backpressure_until_tick;
+            if (backpressure)
+                g_state.throttled_submissions++;
+            else
+                submit_burst = 1;
+        } else {
+            process_set_state(p, READY);
+            p->last_ready_tick = g_state.current_tick;
+        }
     }
     pthread_mutex_unlock(&g_state.lock);
 
@@ -390,6 +449,8 @@ static int dispatch_one(const char *algorithm, int *last_seen,
             snprintf(msg, sizeof(msg), "PID %d completed exam (%s)", pid, algorithm);
             log_event("INFO", "SCHEDULER", msg);
         }
+    } else if (blocked && submit_burst) {
+        io_buffer_submit(pid, (burst_number % 10) + 1, "BURST", 0);
     }
 
     pthread_mutex_lock(&rq_lock);
@@ -399,6 +460,8 @@ static int dispatch_one(const char *algorithm, int *last_seen,
             rr_remove(selected_index);
         } else if (g_state.processes[slot].state == READY) {
             rr_index = (selected_index + 1) % rq_size;
+        } else if (g_state.processes[slot].state == WAITING) {
+            rr_remove(selected_index);
         }
     } else if (!done && g_state.processes[slot].state == READY) {
         heap_push(slot);
@@ -449,6 +512,7 @@ void *scheduler_thread(void *arg) {
             g_state.idle_ticks += elapsed;
             update_cpu_utilization();
             pthread_mutex_unlock(&g_state.lock);
+            admit_arrivals(&next_arrival_tick);
             continue;
         }
         if (idle_trace_start >= 0) {

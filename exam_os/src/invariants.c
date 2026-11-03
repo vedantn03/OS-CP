@@ -30,6 +30,8 @@ int invariants_run(void) {
     int busy_ticks;
     int idle_ticks;
     int final_tick;
+    int block_events;
+    int wakeups;
 
     invariant_file = fopen("output/invariants.txt", "w");
     failures = 0;
@@ -51,6 +53,8 @@ int invariants_run(void) {
     busy_ticks = g_state.busy_ticks;
     idle_ticks = g_state.idle_ticks;
     final_tick = g_state.current_tick;
+    block_events = g_state.block_events;
+    wakeups = g_state.wakeups;
     memcpy(processes, g_state.processes, sizeof(processes));
     pthread_mutex_unlock(&g_state.lock);
 
@@ -97,6 +101,9 @@ int invariants_run(void) {
         cpu_sum += processes[i].cpu_ticks;
     snprintf(msg, sizeof(msg), "cpu_sum=%d busy=%d", cpu_sum, busy_ticks);
     report_check("I8", cpu_sum == busy_ticks, msg);
+
+    snprintf(msg, sizeof(msg), "wakeups=%d blocked=%d", wakeups, block_events);
+    report_check("I9", wakeups <= block_events, msg);
 
     if (invariant_file) fclose(invariant_file);
     invariant_file = NULL;
