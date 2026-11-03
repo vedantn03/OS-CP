@@ -171,8 +171,14 @@ void logger_write_report() {
     fprintf(f, "║   Dropped Log Records: %-17d ║\n", g_state.dropped_logs);
     fprintf(f, "╠══════════════════════════════════════════╣\n");
     fprintf(f, "║ MEMORY                                   ║\n");
+    fprintf(f, "║   Page Replacement  : %-18s ║\n", page_algo_name(g_config.page_algo));
     fprintf(f, "║   Page Faults       : %-18d ║\n", g_state.page_faults);
     fprintf(f, "║   Page Hits         : %-18d ║\n", g_state.page_hits);
+    fprintf(f, "║   Evictions         : %-18d ║\n", g_state.evictions);
+    fprintf(f, "║   Dirty Writebacks  : %-18d ║\n", g_state.dirty_writebacks);
+    fprintf(f, "║   Page Fault Rate   : %-17.1f%% ║\n",
+            total > 0 ? (double)g_state.page_faults * 100.0 / total : 0.0);
+    fprintf(f, "║   Thrash Episodes   : %-18d ║\n", g_state.thrash_episodes);
     fprintf(f, "║   Hit Rate          : %-17.1f%% ║\n", hit_rate);
     fprintf(f, "╠══════════════════════════════════════════╣\n");
     fprintf(f, "║ I/O BUFFER                               ║\n");

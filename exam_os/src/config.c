@@ -44,6 +44,28 @@ const char *sched_algo_name(SchedAlgo algo) {
     }
 }
 
+int config_parse_page_algo(const char *value, PageAlgo *algo) {
+    char normalized[16];
+    size_t length = strlen(value);
+    if (length >= sizeof(normalized)) return 0;
+    for (size_t i = 0; i <= length; i++)
+        normalized[i] = (char)toupper((unsigned char)value[i]);
+    if (strcmp(normalized, "LRU") == 0) *algo = LRU;
+    else if (strcmp(normalized, "FIFO") == 0) *algo = FIFO;
+    else if (strcmp(normalized, "CLOCK") == 0) *algo = CLOCK;
+    else return 0;
+    return 1;
+}
+
+const char *page_algo_name(PageAlgo algo) {
+    switch (algo) {
+    case LRU: return "LRU";
+    case FIFO: return "FIFO";
+    case CLOCK: return "CLOCK";
+    default: return "UNKNOWN";
+    }
+}
+
 void config_load_defaults(Config *cfg) {
     cfg->num_students    = 50;
     cfg->memory_frames   = 64;
@@ -75,6 +97,13 @@ void config_load_defaults(Config *cfg) {
     cfg->preempt         = 1;
     cfg->mlfq_levels     = 3;
     cfg->mlfq_boost      = 100;
+    cfg->pages_per_proc  = 16;
+    cfg->ws_size         = 4;
+    cfg->locality        = 90;
+    cfg->phase_ticks     = 40;
+    cfg->write_pct       = 30;
+    cfg->thrash_high     = 45;
+    cfg->page_trace      = 0;
 }
 
 int config_parse_file(Config *cfg, const char *filepath) {
@@ -111,6 +140,13 @@ int config_parse_file(Config *cfg, const char *filepath) {
         else if (strcmp(key, "PREEMPT")         == 0 && numeric) cfg->preempt         = (int)number;
         else if (strcmp(key, "MLFQ_LEVELS")     == 0 && numeric) cfg->mlfq_levels     = (int)number;
         else if (strcmp(key, "MLFQ_BOOST")      == 0 && numeric) cfg->mlfq_boost      = (int)number;
+        else if (strcmp(key, "PAGES_PER_PROC")  == 0 && numeric) cfg->pages_per_proc  = (int)number;
+        else if (strcmp(key, "WS_SIZE")         == 0 && numeric) cfg->ws_size         = (int)number;
+        else if (strcmp(key, "LOCALITY")        == 0 && numeric) cfg->locality        = (int)number;
+        else if (strcmp(key, "PHASE_TICKS")     == 0 && numeric) cfg->phase_ticks     = (int)number;
+        else if (strcmp(key, "WRITE_PCT")       == 0 && numeric) cfg->write_pct       = (int)number;
+        else if (strcmp(key, "THRASH_HIGH")     == 0 && numeric) cfg->thrash_high     = (int)number;
+        else if (strcmp(key, "PAGE_TRACE")      == 0 && numeric) cfg->page_trace      = (int)number;
         else if (strcmp(key, "WORKLOAD")         == 0) {
             for (char *p = val; *p; p++) *p = (char)toupper((unsigned char)*p);
             if (strcmp(val, "INTERACTIVE") == 0)
@@ -129,8 +165,13 @@ int config_parse_file(Config *cfg, const char *filepath) {
                 return 0;
             }
         }
-        else if (strcmp(key, "PAGE_REPLACE")     == 0)
-            cfg->page_algo  = (strcmp(val, "FIFO") == 0) ? FIFO : LRU;
+        else if (strcmp(key, "PAGE_REPLACE") == 0) {
+            if (!config_parse_page_algo(val, &cfg->page_algo)) {
+                fprintf(stderr, "ERROR: PAGE_REPLACE must be LRU, FIFO, or CLOCK\n");
+                fclose(f);
+                return 0;
+            }
+        }
     }
 
     fclose(f);
@@ -165,8 +206,12 @@ int config_parse_args(Config *cfg, int argc, char *argv[]) {
             cfg->mlfq_levels = atoi(argv[++i]);
         else if (strcmp(argv[i], "--mlfq-boost") == 0 && i+1 < argc)
             cfg->mlfq_boost = atoi(argv[++i]);
-        else if (strcmp(argv[i], "--page")     == 0 && i+1 < argc)
-            cfg->page_algo  = (strcmp(argv[++i], "FIFO") == 0) ? FIFO : LRU;
+        else if (strcmp(argv[i], "--page") == 0 && i+1 < argc) {
+            if (!config_parse_page_algo(argv[++i], &cfg->page_algo)) {
+                fprintf(stderr, "ERROR: --page must be LRU, FIFO, or CLOCK\n");
+                return 0;
+            }
+        }
         else if (strcmp(argv[i], "--demo")     == 0) cfg->demo_mode = 1;
         else if (strcmp(argv[i], "--headless") == 0) cfg->headless_mode = 1;
         else if (strcmp(argv[i], "--strict")   == 0) cfg->strict = 1;
@@ -192,6 +237,13 @@ int config_parse_args(Config *cfg, int argc, char *argv[]) {
         else if (strcmp(argv[i], "--burst-max") == 0 && i+1 < argc) cfg->burst_max = atoi(argv[++i]);
         else if (strcmp(argv[i], "--think-min") == 0 && i+1 < argc) cfg->think_min = atoi(argv[++i]);
         else if (strcmp(argv[i], "--think-max") == 0 && i+1 < argc) cfg->think_max = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--pages") == 0 && i+1 < argc) cfg->pages_per_proc = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--ws") == 0 && i+1 < argc) cfg->ws_size = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--locality") == 0 && i+1 < argc) cfg->locality = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--phase") == 0 && i+1 < argc) cfg->phase_ticks = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--write-pct") == 0 && i+1 < argc) cfg->write_pct = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--thrash-high") == 0 && i+1 < argc) cfg->thrash_high = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--page-trace") == 0) cfg->page_trace = 1;
         else if (strcmp(argv[i], "--help")   == 0) {
             printf("Usage: ./exam_os [options]\n");
             printf("  --students N   Number of students\n");
@@ -209,7 +261,14 @@ int config_parse_args(Config *cfg, int argc, char *argv[]) {
             printf("  --preempt 0|1   Enable PRIO preemption\n");
             printf("  --mlfq-levels N  MLFQ levels (2..6)\n");
             printf("  --mlfq-boost N  MLFQ boost interval in ticks (0 disables boosts)\n");
-            printf("  --page FIFO|LRU     Page replacement algorithm\n");
+            printf("  --page LRU|FIFO|CLOCK  Page replacement algorithm\n");
+            printf("  --pages N         Pages per process (4..%d)\n", MAX_PAGES);
+            printf("  --ws N            Working-set size\n");
+            printf("  --locality N      Locality percentage (0..100)\n");
+            printf("  --phase N         Phase duration in ticks\n");
+            printf("  --write-pct N     Write percentage (0..100)\n");
+            printf("  --thrash-high N   Thrash threshold percentage (1..100)\n");
+            printf("  --page-trace      Write page reference trace\n");
             printf("  --headless      Disable dashboard\n");
             printf("  --demo          Enable demo mode\n");
             printf("  --seed N        Random seed\n");
@@ -266,6 +325,20 @@ int config_validate(const Config *cfg, char *error, size_t error_size) {
         snprintf(error, error_size, "MLFQ_LEVELS must be 2..6");
     else if (cfg->mlfq_boost < 0)
         snprintf(error, error_size, "MLFQ_BOOST must be non-negative");
+    else if (cfg->pages_per_proc < 4 || cfg->pages_per_proc > MAX_PAGES)
+        snprintf(error, error_size, "PAGES_PER_PROC must be 4..%d", MAX_PAGES);
+    else if (cfg->ws_size < 1 || cfg->ws_size > cfg->pages_per_proc)
+        snprintf(error, error_size, "WS_SIZE must be 1..PAGES_PER_PROC");
+    else if (cfg->locality < 0 || cfg->locality > 100)
+        snprintf(error, error_size, "LOCALITY must be 0..100");
+    else if (cfg->phase_ticks < 1)
+        snprintf(error, error_size, "PHASE_TICKS must be at least 1");
+    else if (cfg->write_pct < 0 || cfg->write_pct > 100)
+        snprintf(error, error_size, "WRITE_PCT must be 0..100");
+    else if (cfg->thrash_high < 1 || cfg->thrash_high > 100)
+        snprintf(error, error_size, "THRASH_HIGH must be 1..100");
+    else if (cfg->page_trace < 0 || cfg->page_trace > 1)
+        snprintf(error, error_size, "PAGE_TRACE must be 0 or 1");
     else if (cfg->demand_min < 1)
         snprintf(error, error_size, "DEMAND_MIN must be at least 1");
     else if (cfg->demand_max < cfg->demand_min)
@@ -310,7 +383,14 @@ void config_print(Config *cfg) {
     printf("│ Preempt      : %-26d │\n", cfg->preempt);
     printf("│ MLFQ Levels  : %-26d │\n", cfg->mlfq_levels);
     printf("│ MLFQ Boost   : %-26d │\n", cfg->mlfq_boost);
-    printf("│ Page Replace : %-26s │\n", cfg->page_algo  == LRU      ? "LRU"      : "FIFO");
+    printf("│ Page Replace : %-26s │\n", page_algo_name(cfg->page_algo));
+    printf("│ Pages/Proc   : %-26d │\n", cfg->pages_per_proc);
+    printf("│ Working Set  : %-26d │\n", cfg->ws_size);
+    printf("│ Locality     : %-26d │\n", cfg->locality);
+    printf("│ Phase Ticks  : %-26d │\n", cfg->phase_ticks);
+    printf("│ Write %%      : %-26d │\n", cfg->write_pct);
+    printf("│ Thrash High  : %-26d │\n", cfg->thrash_high);
+    printf("│ Page Trace   : %-26s │\n", cfg->page_trace ? "ON" : "OFF");
     printf("│ Demo Mode    : %-26s │\n", cfg->demo_mode  ? "ON" : "OFF");
     printf("│ Headless     : %-26s │\n", cfg->headless_mode ? "ON" : "OFF");
     printf("└─────────────────────────────────────────┘\n");

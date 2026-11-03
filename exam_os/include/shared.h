@@ -15,6 +15,8 @@
 #define MAX_INTERRUPTS   8
 #define TIME_TICK_MS     100
 #define BACKPRESSURE_TICKS 5
+#define THRASH_WINDOW      40
+#define PAGE_TRACE_MAX     200000
 
 // ─── Enums ───────────────────────────────────────────────
 typedef enum {
@@ -26,7 +28,7 @@ typedef enum {
 } SchedAlgo;
 
 typedef enum {
-    LRU, FIFO
+    LRU, FIFO, CLOCK
 } PageAlgo;
 
 typedef enum {
@@ -117,6 +119,13 @@ typedef struct {
     int       preempt;
     int       mlfq_levels;
     int       mlfq_boost;
+    int       pages_per_proc;
+    int       ws_size;
+    int       locality;
+    int       phase_ticks;
+    int       write_pct;
+    int       thrash_high;
+    int       page_trace;
 } Config;
 
 // ─── System State (shared across all modules) ────────────
@@ -144,6 +153,10 @@ typedef struct {
     int   page_faults;
     int   page_hits;
     int   frames_used;
+    int   evictions;
+    int   dirty_writebacks;
+    int   thrash_episodes;
+    int   thrashing;
 
     // I/O Buffer
     int   buffer_count;

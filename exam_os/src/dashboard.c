@@ -204,7 +204,7 @@ void *dashboard_thread(void *arg) {
         mvwprintw(w_mem, 5, 2, "Hit Rate: ");
         wattron(w_mem, COLOR_PAIR(1));
         wprintw(w_mem, "%.1f%%  [%s]", hit_rate,
-                g_config.page_algo == LRU ? "LRU" : "FIFO");
+                page_algo_name(g_config.page_algo));
         wattroff(w_mem, COLOR_PAIR(1));
         wrefresh(w_mem);
 

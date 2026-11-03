@@ -207,6 +207,45 @@ if "$BIN" --headless --algo BOGUS >"$TMP/t27.out" 2>&1; then
 fi
 pass T27
 
+run_page_case() {
+    "$BIN" --headless --strict --tick-ms 10 --workload INTERACTIVE \
+        --students 12 --duration 300 --seed 21 "$@" >"$TMP/page.out" 2>&1 ||
+        return 1
+    ! grep -q '^FAIL ' output/invariants.txt
+}
+
+run_page_case --frames 24 --page CLOCK || fail T28 "CLOCK run failed"
+pass T28
+
+run_page_case --frames 24 --page FIFO || fail T29 "FIFO run failed"
+evictions=$(grep 'Evictions' output/summary.txt | sed 's/.*: *//; s/[^0-9].*//')
+[ "$evictions" -gt 0 ] || fail T29 "FIFO had no evictions"
+pass T29
+
+run_page_case --frames 24 --write-pct 0 || fail T30 "read-only run failed"
+dirty=$(grep 'Dirty Writebacks' output/summary.txt | sed 's/.*: *//; s/[^0-9].*//')
+[ "$dirty" -eq 0 ] || fail T30 "read-only run had dirty writebacks"
+pass T30
+
+"$BIN" --headless --strict --tick-ms 10 --workload INTERACTIVE \
+    --students 12 --duration 300 --frames 24 --page-trace --seed 21 >"$TMP/page-trace.out" 2>&1 ||
+    fail T31 "page-trace run failed"
+faults=$(grep 'Page Faults' output/summary.txt | sed 's/.*: *//; s/[^0-9].*//')
+hits=$(grep 'Page Hits' output/summary.txt | sed 's/.*: *//; s/[^0-9].*//')
+trace_lines=$(wc -l < output/pagetrace.txt)
+[ "$trace_lines" -eq $((faults + hits)) ] || fail T31 "page trace count mismatch"
+pass T31
+
+if "$BIN" --headless --page BOGUS >"$TMP/bad-page.out" 2>&1; then
+    fail T32 "invalid page algorithm accepted"
+fi
+pass T32
+
+if "$BIN" --headless --ws 99 >"$TMP/bad-ws.out" 2>&1; then
+    fail T33 "invalid working set accepted"
+fi
+pass T33
+
 make clean >/dev/null
 pass T8
-printf 'All T1-T27 tests passed.\n'
+printf 'All T1-T33 tests passed.\n'

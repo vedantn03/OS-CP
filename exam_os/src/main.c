@@ -194,6 +194,7 @@ int main(int argc, char *argv[]) {
     pthread_join(t_tick,      NULL);
 
     // ─── Write final report ───────────────────────────────
+    memory_write_trace();
     printf("\n  Simulation complete. Writing report...\n");
     logger_write_report();
     int invariant_failures = invariants_run();

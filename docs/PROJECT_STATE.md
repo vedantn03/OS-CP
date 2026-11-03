@@ -37,3 +37,5 @@ threaded simulation is not bit-exact repeatable across runs.
 - 2026-11-03: Added static priority scheduling with aging and a multilevel
   feedback queue with configurable levels, preemption, demotion, and boosts.
 - 2026-11-03: 2.4: compare harness and gantt.
+- 2026-11-03: Added locality-based paging, CLOCK replacement, dirty-page
+  tracking, eviction/thrash counters, and optional page-reference tracing.

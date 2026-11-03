@@ -34,6 +34,10 @@ int invariants_run(void) {
     int block_events;
     int wakeups;
     int process_levels_ok = 1;
+    int evictions;
+    int dirty_writebacks;
+    int frames_used;
+    int page_faults;
 
     invariant_file = fopen("output/invariants.txt", "w");
     failures = 0;
@@ -58,6 +62,10 @@ int invariants_run(void) {
     final_tick = g_state.current_tick;
     block_events = g_state.block_events;
     wakeups = g_state.wakeups;
+    evictions = g_state.evictions;
+    dirty_writebacks = g_state.dirty_writebacks;
+    frames_used = g_state.frames_used;
+    page_faults = g_state.page_faults;
     memcpy(processes, g_state.processes, sizeof(processes));
     pthread_mutex_unlock(&g_state.lock);
 
@@ -119,6 +127,13 @@ int invariants_run(void) {
     }
     if (process_levels_ok) msg[0] = '\0';
     report_check("I10", process_levels_ok, msg);
+
+    snprintf(msg, sizeof(msg), "evictions=%d faults=%d dirty=%d frames=%d configured=%d",
+             evictions, page_faults, dirty_writebacks, frames_used,
+             g_config.memory_frames);
+    report_check("I11", evictions <= page_faults &&
+                 dirty_writebacks <= evictions &&
+                 frames_used <= g_config.memory_frames, msg);
 
     if (invariant_file) fclose(invariant_file);
     invariant_file = NULL;
