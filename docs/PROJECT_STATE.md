@@ -8,6 +8,18 @@ interactive workloads.
 
 ## Changelog
 
+## Experiments
+
+Run `make compare` or `bash exam_os/scripts/compare.sh` to generate
+`docs/results/compare.csv` and `compare.md`. Run `make gantt` to generate an
+ASCII chart from a traced RR run, or invoke `bash exam_os/scripts/gantt.sh`
+with a trace file and optional `--width`.
+
+The comparison table reports averages across seeds: lower is better for wait,
+turnaround, response, timeouts, and switches; higher is better for completed
+exams, CPU utilization, and throughput. Results are averages because the
+threaded simulation is not bit-exact repeatable across runs.
+
 - 2026-11-02: Completed memory race protection, configurable tick timing,
   interactive workload WAITING transitions, test restoration, and sanitizer
   validation for phases 1.5–2.2.
@@ -24,3 +36,4 @@ interactive workloads.
   PRIORITY retains shortest-remaining-time at dispatch boundaries (legacy name PRIORITY).
 - 2026-11-03: Added static priority scheduling with aging and a multilevel
   feedback queue with configurable levels, preemption, demotion, and boosts.
+- 2026-11-03: 2.4: compare harness and gantt.

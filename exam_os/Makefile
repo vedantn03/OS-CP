@@ -37,7 +37,21 @@ headless: all
 test:
 	sh tests/run_tests.sh
 
-.PHONY: all clean run demo headless test
+compare: all
+	bash scripts/compare.sh
+
+gantt: all
+	./$(OUT) --headless --strict --tick-ms 10 --trace --workload INTERACTIVE --students 8 --duration 200 --algo RR --seed 3
+	bash scripts/gantt.sh
+
+help:
+	@echo "make run       Run the simulator"
+	@echo "make headless  Run without the dashboard"
+	@echo "make test      Run the test suite"
+	@echo "make compare   Generate scheduler comparison results"
+	@echo "make gantt     Generate a trace and ASCII Gantt chart"
+
+.PHONY: all clean run demo headless test compare gantt help
 tsan: exam_os_tsan
 
 exam_os_tsan: $(SRC)
