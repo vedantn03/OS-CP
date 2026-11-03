@@ -280,6 +280,30 @@ deferred=$(grep 'Deferred Arrival Ticks' output/summary.txt | sed 's/.*: *//; s/
 [ "$deferred" -eq 0 ] || fail T37 "disabled thrash control deferred arrivals"
 pass T37
 
+make disksim >/dev/null || fail T38 "disksim build failed"
+DISK_QUEUE="98 183 37 122 14 124 65 67"
+disk_movement() {
+    "$ROOT/disksim" --algo "$1" --head 53 --cylinders 200 \
+        --string "$DISK_QUEUE" | sed -n 's/^movement: //p'
+}
+[ "$(disk_movement FIFO)" -eq 640 ] || fail T38 "FIFO movement mismatch"
+[ "$(disk_movement SSTF)" -eq 236 ] || fail T38 "SSTF movement mismatch"
+[ "$(disk_movement SCAN)" -eq 331 ] || fail T38 "SCAN movement mismatch"
+[ "$(disk_movement CSCAN)" -eq 382 ] || fail T38 "C-SCAN movement mismatch"
+if "$ROOT/disksim" --algo BOGUS --head 53 --cylinders 200 \
+    --string "$DISK_QUEUE" >/dev/null 2>&1; then
+    fail T38 "invalid disk algorithm was accepted"
+elif [ "$?" -ne 2 ]; then
+    fail T38 "invalid disk algorithm exit code"
+fi
+if "$ROOT/disksim" --algo FIFO --head 53 --cylinders 200 \
+    --string "999" >/dev/null 2>&1; then
+    fail T38 "out-of-range disk request was accepted"
+elif [ "$?" -ne 1 ]; then
+    fail T38 "out-of-range disk request exit code"
+fi
+pass T38
+
 make clean >/dev/null
 pass T8
-printf 'All T1-T37 tests passed.\n'
+printf 'All T1-T38 tests passed.\n'

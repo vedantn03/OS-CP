@@ -8,6 +8,28 @@ interactive workloads.
 
 ## Changelog
 
+- 4.1a: disk_sched module and disksim
+
+## Disk scheduling model
+
+The pure disk scheduling module supports FIFO, LIFO, SSTF, SCAN, and C-SCAN.
+Requests retain arrival-order indices, and equal-cylinder requests are served
+by arrival order. Movement includes every head move, including SCAN travel to
+the disk endpoint and the C-SCAN return jump; the reported final head is the
+last request cylinder, not an endpoint or jump position.
+
+Build and run the standalone tool with:
+
+    make disksim
+    ./disksim --algo SCAN --head 53 --cylinders 200 \
+        --string "98 183 37 122 14 124 65 67" --dir up
+
+The tool accepts `--string` or `--file` input and prints the service order,
+movement, final head, and final direction. Usage errors (including unknown
+algorithms, invalid geometry, bad directions, missing input, and unknown
+options) exit 2. Empty input, unreadable files, malformed tokens, and
+out-of-range requests exit 1.
+
 ## Experiments
 
 Run `make compare` or `bash exam_os/scripts/compare.sh` to generate
