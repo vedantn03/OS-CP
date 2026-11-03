@@ -15,3 +15,5 @@ interactive workloads.
   clock sleep/notification infrastructure.
 - 2026-11-03: Made scheduler CPU accounting tick-driven with utilization,
   invariants, and optional dispatch tracing.
+- 2026-11-03: Added configurable interactive CPU demand and completion
+  submissions while preserving the legacy workload model.

@@ -211,14 +211,17 @@ void *io_buffer_thread(void *arg) {
         int backpressure_until = g_state.backpressure_until_tick;
         pthread_mutex_unlock(&g_state.lock);
 
-        if (pid > 0 && prcount > 0 && tick >= backpressure_until) {
+        if (g_config.workload == WORKLOAD_LEGACY &&
+            pid > 0 && prcount > 0 && tick >= backpressure_until) {
             // 30% chance a process submits an answer each tick
             if (rng_uniform(100) < 30) {
                 char answer[64];
                 snprintf(answer, sizeof(answer), "ANS_%d", rng_uniform(1000));
                 io_buffer_submit(pid, rng_uniform(10) + 1, answer, 0);
             }
-        } else if (pid > 0 && prcount > 0 && tick < backpressure_until && !g_config.demo_mode) {
+        } else if (g_config.workload == WORKLOAD_LEGACY &&
+                   pid > 0 && prcount > 0 && tick < backpressure_until &&
+                   !g_config.demo_mode) {
             pthread_mutex_lock(&g_state.lock);
             g_state.throttled_submissions++;
             pthread_mutex_unlock(&g_state.lock);

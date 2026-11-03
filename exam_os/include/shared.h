@@ -52,6 +52,9 @@ typedef struct {
     int          timed_out;
     int          cpu_ticks;
     int          wait_until_tick;
+    int          burst_remaining;
+    int          wake_tick;
+    int          bursts_done;
 } PCB;
 
 // ─── Page Table Entry ────────────────────────────────────
@@ -101,6 +104,12 @@ typedef struct {
     int       tick_ms;
     int       trace;
     WorkloadKind workload;
+    int       demand_min;
+    int       demand_max;
+    int       burst_min;
+    int       burst_max;
+    int       think_min;
+    int       think_max;
 } Config;
 
 // ─── System State (shared across all modules) ────────────
@@ -134,6 +143,8 @@ typedef struct {
     // Interrupts
     int   timeouts_fired;
     int   overload_signals;
+    int   block_events;
+    int   wakeups;
 
     // Processes
     PCB   processes[MAX_STUDENTS];

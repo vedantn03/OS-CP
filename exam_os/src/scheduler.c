@@ -7,6 +7,7 @@
 #include "logger.h"
 #include "rng.h"
 #include "process.h"
+#include "io_buffer.h"
 
 static int ready_queue[MAX_STUDENTS];
 static int rq_size = 0;
@@ -190,8 +191,13 @@ void scheduler_add_process(PCB process) {
     process.timeout_pending = 0;
     process.timed_out = 0;
     process.cpu_ticks = 0;
+    process.burst_remaining = 0;
+    process.wake_tick = -1;
+    process.bursts_done = 0;
     process.deadline_tick = now +
-        (g_config.session_limit > 0 ? g_config.session_limit : process.remaining_time);
+        (g_config.session_limit > 0 ? g_config.session_limit
+         : g_config.workload == WORKLOAD_INTERACTIVE
+             ? g_config.exam_duration : process.remaining_time);
     if (process_set_state(&process, READY) != 0) {
         pthread_mutex_unlock(&g_state.lock);
         pthread_mutex_unlock(&rq_lock);
@@ -274,12 +280,17 @@ static void admit_arrivals(int *next_arrival_tick) {
         int batch = (g_config.num_students - added < g_config.arrival_batch)
             ? g_config.num_students - added : g_config.arrival_batch;
         for (int i = 0; i < batch; i++) {
+            int demand = g_config.workload == WORKLOAD_INTERACTIVE
+                ? g_config.demand_min +
+                  rng_uniform(g_config.demand_max - g_config.demand_min + 1)
+                : g_config.exam_duration - rng_uniform(10);
             PCB p = {
                 .pid = added + i + 1,
                 .state = NEW,
                 .priority = 1,
-                .total_time = g_config.exam_duration,
-                .remaining_time = g_config.exam_duration - rng_uniform(10),
+                .total_time = g_config.workload == WORKLOAD_INTERACTIVE
+                    ? demand : g_config.exam_duration,
+                .remaining_time = demand,
                 .waiting_time = 0,
                 .turnaround_time = 0,
                 .pages_used = 0
@@ -365,9 +376,15 @@ static int dispatch_one(const char *algorithm, int *last_seen,
     p = &g_state.processes[slot];
     if (!interrupted && p->state == RUNNING && p->remaining_time <= 0)
         done = 1;
+    else if (!interrupted && p->state == RUNNING) {
+        process_set_state(p, READY);
+        p->last_ready_tick = g_state.current_tick;
+    }
     pthread_mutex_unlock(&g_state.lock);
 
     if (done) {
+        if (g_config.workload == WORKLOAD_INTERACTIVE)
+            io_buffer_submit(pid, (pid % 10) + 1, "FINAL", 0);
         if (process_terminate(pid, 0)) {
             char msg[96];
             snprintf(msg, sizeof(msg), "PID %d completed exam (%s)", pid, algorithm);

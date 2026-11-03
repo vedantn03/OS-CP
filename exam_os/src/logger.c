@@ -138,6 +138,8 @@ void logger_write_report() {
     fprintf(f, "║       EXAM OS SIMULATION REPORT          ║\n");
     fprintf(f, "╠══════════════════════════════════════════╣\n");
     fprintf(f, "║ CPU                                      ║\n");
+    fprintf(f, "║   Workload           : %-18s ║\n",
+            g_config.workload == WORKLOAD_INTERACTIVE ? "INTERACTIVE" : "LEGACY");
     fprintf(f, "║   Context Switches  : %-18d ║\n", g_state.context_switches);
     fprintf(f, "║   Dispatches        : %-18d ║\n", g_state.dispatches);
     fprintf(f, "║   Busy Ticks        : %-18d ║\n", g_state.busy_ticks);

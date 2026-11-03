@@ -3,6 +3,7 @@
 #include <string.h>
 #include <errno.h>
 #include <limits.h>
+#include <ctype.h>
 #include "config.h"
 
 void config_load_defaults(Config *cfg) {
@@ -23,7 +24,13 @@ void config_load_defaults(Config *cfg) {
     cfg->strict          = 0;
     cfg->tick_ms         = TIME_TICK_MS;
     cfg->trace            = 0;
-    cfg->workload        = WORKLOAD_LEGACY;
+    cfg->workload        = WORKLOAD_INTERACTIVE;
+    cfg->demand_min      = 10;
+    cfg->demand_max      = 25;
+    cfg->burst_min       = 2;
+    cfg->burst_max       = 6;
+    cfg->think_min       = 4;
+    cfg->think_max       = 12;
 }
 
 int config_parse_file(Config *cfg, const char *filepath) {
@@ -48,9 +55,23 @@ int config_parse_file(Config *cfg, const char *filepath) {
         else if (strcmp(key, "ARRIVAL_BATCH")    == 0 && numeric) cfg->arrival_batch   = (int)number;
         else if (strcmp(key, "ARRIVAL_INTERVAL") == 0 && numeric) cfg->arrival_interval = (int)number;
         else if (strcmp(key, "TICK_MS")          == 0 && numeric) cfg->tick_ms = (int)number;
-        else if (strcmp(key, "WORKLOAD")         == 0)
-            cfg->workload = (strcmp(val, "INTERACTIVE") == 0)
-                ? WORKLOAD_INTERACTIVE : WORKLOAD_LEGACY;
+        else if (strcmp(key, "DEMAND_MIN")       == 0 && numeric) cfg->demand_min = (int)number;
+        else if (strcmp(key, "DEMAND_MAX")       == 0 && numeric) cfg->demand_max = (int)number;
+        else if (strcmp(key, "BURST_MIN")        == 0 && numeric) cfg->burst_min = (int)number;
+        else if (strcmp(key, "BURST_MAX")        == 0 && numeric) cfg->burst_max = (int)number;
+        else if (strcmp(key, "THINK_MIN")        == 0 && numeric) cfg->think_min = (int)number;
+        else if (strcmp(key, "THINK_MAX")        == 0 && numeric) cfg->think_max = (int)number;
+        else if (strcmp(key, "WORKLOAD")         == 0) {
+            for (char *p = val; *p; p++) *p = (char)toupper((unsigned char)*p);
+            if (strcmp(val, "INTERACTIVE") == 0)
+                cfg->workload = WORKLOAD_INTERACTIVE;
+            else if (strcmp(val, "LEGACY") == 0)
+                cfg->workload = WORKLOAD_LEGACY;
+            else {
+                fprintf(stderr, "ERROR: WORKLOAD must be LEGACY or INTERACTIVE\n");
+                return 0;
+            }
+        }
         else if (strcmp(key, "SCHEDULING_ALGO")  == 0)
             cfg->sched_algo = (strcmp(val, "ROUND_ROBIN") == 0) ? ROUND_ROBIN : PRIORITY;
         else if (strcmp(key, "PAGE_REPLACE")     == 0)
@@ -80,10 +101,26 @@ int config_parse_args(Config *cfg, int argc, char *argv[]) {
         else if (strcmp(argv[i], "--strict")   == 0) cfg->strict = 1;
         else if (strcmp(argv[i], "--tick-ms") == 0 && i+1 < argc) cfg->tick_ms = atoi(argv[++i]);
         else if (strcmp(argv[i], "--trace")    == 0) cfg->trace = 1;
-        else if (strcmp(argv[i], "--workload") == 0 && i+1 < argc)
-            cfg->workload = (strcmp(argv[++i], "INTERACTIVE") == 0)
-                ? WORKLOAD_INTERACTIVE : WORKLOAD_LEGACY;
+        else if (strcmp(argv[i], "--workload") == 0 && i+1 < argc) {
+            char workload[32];
+            snprintf(workload, sizeof(workload), "%s", argv[++i]);
+            for (char *p = workload; *p; p++) *p = (char)toupper((unsigned char)*p);
+            if (strcmp(workload, "INTERACTIVE") == 0)
+                cfg->workload = WORKLOAD_INTERACTIVE;
+            else if (strcmp(workload, "LEGACY") == 0)
+                cfg->workload = WORKLOAD_LEGACY;
+            else {
+                fprintf(stderr, "ERROR: --workload must be LEGACY or INTERACTIVE\n");
+                return 0;
+            }
+        }
         else if (strcmp(argv[i], "--seed")    == 0 && i+1 < argc) cfg->random_seed = (unsigned int)strtoul(argv[++i], NULL, 10);
+        else if (strcmp(argv[i], "--demand-min") == 0 && i+1 < argc) cfg->demand_min = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--demand-max") == 0 && i+1 < argc) cfg->demand_max = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--burst-min") == 0 && i+1 < argc) cfg->burst_min = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--burst-max") == 0 && i+1 < argc) cfg->burst_max = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--think-min") == 0 && i+1 < argc) cfg->think_min = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--think-max") == 0 && i+1 < argc) cfg->think_max = atoi(argv[++i]);
         else if (strcmp(argv[i], "--help")   == 0) {
             printf("Usage: ./exam_os [options]\n");
             printf("  --students N   Number of students\n");
@@ -103,6 +140,12 @@ int config_parse_args(Config *cfg, int argc, char *argv[]) {
             printf("  --tick-ms N     Tick duration in milliseconds\n");
             printf("  --trace         Write scheduler trace to output/trace.csv\n");
             printf("  --workload LEGACY|INTERACTIVE  Workload behavior\n");
+            printf("  --demand-min N  Minimum CPU demand per student\n");
+            printf("  --demand-max N  Maximum CPU demand per student\n");
+            printf("  --burst-min N   Minimum CPU burst length\n");
+            printf("  --burst-max N   Maximum CPU burst length\n");
+            printf("  --think-min N   Minimum think time\n");
+            printf("  --think-max N   Maximum think time\n");
             exit(EXIT_SUCCESS);
         }
         else {
@@ -134,6 +177,18 @@ int config_validate(const Config *cfg, char *error, size_t error_size) {
         snprintf(error, error_size, "ARRIVAL_INTERVAL must be at least 1");
     else if (cfg->tick_ms < 1 || cfg->tick_ms > 60000)
         snprintf(error, error_size, "TICK_MS must be 1..60000");
+    else if (cfg->demand_min < 1)
+        snprintf(error, error_size, "DEMAND_MIN must be at least 1");
+    else if (cfg->demand_max < cfg->demand_min)
+        snprintf(error, error_size, "DEMAND_MAX must be at least DEMAND_MIN");
+    else if (cfg->burst_min < 1)
+        snprintf(error, error_size, "BURST_MIN must be at least 1");
+    else if (cfg->burst_max < cfg->burst_min)
+        snprintf(error, error_size, "BURST_MAX must be at least BURST_MIN");
+    else if (cfg->think_min < 1)
+        snprintf(error, error_size, "THINK_MIN must be at least 1");
+    else if (cfg->think_max < cfg->think_min)
+        snprintf(error, error_size, "THINK_MAX must be at least THINK_MIN");
     else
         return 1;
     return 0;
@@ -152,6 +207,12 @@ void config_print(Config *cfg) {
     printf("│ Trace        : %-26s │\n", cfg->trace ? "ON" : "OFF");
     printf("│ Workload     : %-26s │\n",
            cfg->workload == WORKLOAD_INTERACTIVE ? "INTERACTIVE" : "LEGACY");
+    printf("│ Demand Min   : %-26d │\n", cfg->demand_min);
+    printf("│ Demand Max   : %-26d │\n", cfg->demand_max);
+    printf("│ Burst Min    : %-26d │\n", cfg->burst_min);
+    printf("│ Burst Max    : %-26d │\n", cfg->burst_max);
+    printf("│ Think Min    : %-26d │\n", cfg->think_min);
+    printf("│ Think Max    : %-26d │\n", cfg->think_max);
     printf("│ Buffer       : %-26d │\n", cfg->buffer_capacity);
     printf("│ Scheduling   : %-26s │\n", cfg->sched_algo == PRIORITY ? "PRIORITY" : "ROUND_ROBIN");
     printf("│ Page Replace : %-26s │\n", cfg->page_algo  == LRU      ? "LRU"      : "FIFO");

@@ -41,7 +41,7 @@ grep -q "Hit Rate" output/summary.txt || fail T7 "summary metrics missing"
 grep -q "EXAM OS SIMULATION LOG" output/system_log.txt || fail T7 "log header missing"
 pass T7
 
-"$BIN" --headless --students 10 --duration 80 --limit 10 --seed 1 >"$TMP/timeout.out" 2>&1 || fail T9 "timeout run failed"
+"$BIN" --headless --workload LEGACY --students 10 --duration 80 --limit 10 --seed 1 >"$TMP/timeout.out" 2>&1 || fail T9 "timeout run failed"
 grep -Eq 'Timeouts Fired[[:space:]]*:[[:space:]]*[1-9][0-9]*' output/summary.txt || fail T9 "no timeout was fired"
 grep -q "\[PARTIAL\]" output/submissions.txt || fail T9 "partial submission missing"
 if grep -o "PID [0-9]* terminated" output/system_log.txt | sort | uniq -d | grep -q .; then
@@ -80,7 +80,7 @@ for CASE in \
     "--demo --buffer 8 --students 20 --duration 100" \
     "--limit 10 --students 10 --duration 80"
 do
-    "$BIN" --headless --strict --seed 11 $CASE >"$TMP/t13.out" 2>&1 ||
+    "$BIN" --headless --strict --workload LEGACY --seed 11 $CASE >"$TMP/t13.out" 2>&1 ||
         fail T13 "strict run failed: $CASE"
     if grep -q '^FAIL ' output/invariants.txt; then
         fail T13 "invariant failure: $CASE: $(grep '^FAIL ' output/invariants.txt)"
@@ -111,6 +111,24 @@ do
 done
 pass T16
 
+for ALGO in RR PRIORITY
+do
+    "$BIN" --headless --strict --tick-ms 10 --workload INTERACTIVE \
+        --students 12 --duration 300 --algo "$ALGO" --seed 21 >"$TMP/t17-$ALGO.out" 2>&1 ||
+        fail T17 "$ALGO interactive run failed"
+    if grep -q '^FAIL ' output/invariants.txt; then
+        fail T17 "$ALGO interactive invariant failure"
+    fi
+    completed=$(grep 'Completed Exams' output/summary.txt | sed 's/.*: *//; s/[^0-9].*//')
+    [ "$completed" -ge 10 ] || fail T17 "$ALGO completed fewer than 10 exams"
+done
+pass T17
+
+"$BIN" --headless --strict --tick-ms 10 --workload LEGACY \
+    --students 5 --duration 100 --seed 2 >"$TMP/t18.out" 2>&1 ||
+    fail T18 "legacy run failed"
+pass T18
+
 make clean >/dev/null
 pass T8
-printf 'All T1-T16 tests passed.\n'
+printf 'All T1-T18 tests passed.\n'
