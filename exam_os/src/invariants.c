@@ -27,6 +27,9 @@ int invariants_run(void) {
     int process_count;
     PCB processes[MAX_STUDENTS];
     int io_count;
+    int busy_ticks;
+    int idle_ticks;
+    int final_tick;
 
     invariant_file = fopen("output/invariants.txt", "w");
     failures = 0;
@@ -45,6 +48,9 @@ int invariants_run(void) {
     finished_ok = g_state.finished_ok;
     timeouts_fired = g_state.timeouts_fired;
     process_count = g_state.process_count;
+    busy_ticks = g_state.busy_ticks;
+    idle_ticks = g_state.idle_ticks;
+    final_tick = g_state.current_tick;
     memcpy(processes, g_state.processes, sizeof(processes));
     pthread_mutex_unlock(&g_state.lock);
 
@@ -81,6 +87,16 @@ int invariants_run(void) {
 
     snprintf(msg, sizeof(msg), "buffer=%d capacity=%d", io_count, g_io_buffer.capacity);
     report_check("I6", io_count >= 0 && io_count <= g_config.buffer_capacity, msg);
+
+    snprintf(msg, sizeof(msg), "busy=%d idle=%d final=%d",
+             busy_ticks, idle_ticks, final_tick);
+    report_check("I7", busy_ticks + idle_ticks <= final_tick, msg);
+
+    int cpu_sum = 0;
+    for (int i = 0; i < process_count; i++)
+        cpu_sum += processes[i].cpu_ticks;
+    snprintf(msg, sizeof(msg), "cpu_sum=%d busy=%d", cpu_sum, busy_ticks);
+    report_check("I8", cpu_sum == busy_ticks, msg);
 
     if (invariant_file) fclose(invariant_file);
     invariant_file = NULL;

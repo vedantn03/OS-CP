@@ -140,6 +140,14 @@ void logger_write_report() {
     fprintf(f, "║ CPU                                      ║\n");
     fprintf(f, "║   Context Switches  : %-18d ║\n", g_state.context_switches);
     fprintf(f, "║   Dispatches        : %-18d ║\n", g_state.dispatches);
+    fprintf(f, "║   Busy Ticks        : %-18d ║\n", g_state.busy_ticks);
+    fprintf(f, "║   Idle Ticks        : %-18d ║\n", g_state.idle_ticks);
+    fprintf(f, "║   CPU Utilization   : %-17.1f%% ║\n", g_state.cpu_utilization);
+    fprintf(f, "║   Throughput (per 100 ticks): %-8.1f ║\n",
+            g_state.current_tick > 0
+                ? (double)g_state.finished_ok * 100.0 / g_state.current_tick : 0.0);
+    fprintf(f, "║   Unfinished At End : %-18d ║\n",
+            g_state.process_count - g_state.completed_processes);
     fprintf(f, "║   Avg Waiting Time  : %-18.1f ║\n",
             terminated > 0 ? waiting / terminated : 0.0);
     fprintf(f, "║   Avg Turnaround    : %-18.1f ║\n",

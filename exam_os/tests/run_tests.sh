@@ -102,6 +102,15 @@ do
 done
 pass T15
 
+for ALGO in RR PRIORITY
+do
+    "$BIN" --headless --strict --tick-ms 10 --students 3 --duration 150 --algo "$ALGO" --seed 1 >"$TMP/t16-$ALGO.out" 2>&1 ||
+        fail T16 "$ALGO tick-driven run failed"
+    dispatches=$(grep 'Dispatches' output/summary.txt | sed 's/.*: *//; s/[^0-9].*//')
+    [ "$dispatches" -gt 0 ] || fail T16 "$ALGO had no dispatches"
+done
+pass T16
+
 make clean >/dev/null
 pass T8
-printf 'All T1-T15 tests passed.\n'
+printf 'All T1-T16 tests passed.\n'

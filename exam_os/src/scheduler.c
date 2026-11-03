@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
+#include <errno.h>
+#include <time.h>
 #include "scheduler.h"
 #include "logger.h"
 #include "rng.h"
@@ -11,6 +12,45 @@ static int ready_queue[MAX_STUDENTS];
 static int rq_size = 0;
 static pthread_mutex_t rq_lock = PTHREAD_MUTEX_INITIALIZER;
 static int rr_index = 0;
+
+typedef struct {
+    int tick_start;
+    int tick_end;
+    int pid;
+    const char *reason;
+} TraceRow;
+
+#define TRACE_CAPACITY 20000
+static TraceRow trace_rows[TRACE_CAPACITY];
+static int trace_count;
+static int trace_overflows;
+
+static void trace_record(int tick_start, int tick_end, int pid, const char *reason) {
+    if (!g_config.trace) return;
+    if (trace_count >= TRACE_CAPACITY) {
+        trace_overflows++;
+        return;
+    }
+    trace_rows[trace_count++] = (TraceRow){tick_start, tick_end, pid, reason};
+}
+
+static void trace_write(void) {
+    if (!g_config.trace) return;
+    FILE *f = fopen("output/trace.csv", "w");
+    if (!f) {
+        fprintf(stderr, "ERROR: Could not open output/trace.csv\n");
+        return;
+    }
+    fprintf(f, "tick_start,tick_end,pid,reason\n");
+    for (int i = 0; i < trace_count; i++)
+        fprintf(f, "%d,%d,%d,%s\n", trace_rows[i].tick_start,
+                trace_rows[i].tick_end, trace_rows[i].pid, trace_rows[i].reason);
+    if (fclose(f) != 0)
+        fprintf(stderr, "ERROR: Could not close output/trace.csv\n");
+    if (trace_overflows > 0)
+        fprintf(stderr, "WARNING: Scheduler trace capacity exceeded (%d rows dropped)\n",
+                trace_overflows);
+}
 
 static void swap_slots(int a, int b) {
     int tmp = ready_queue[a];
@@ -178,7 +218,81 @@ void scheduler_terminate_process(int pid) {
     process_terminate(pid, 0);
 }
 
-static int dispatch_one(const char *algorithm, int *busy) {
+static void update_cpu_utilization(void) {
+    int total = g_state.busy_ticks + g_state.idle_ticks;
+    g_state.cpu_utilization = total > 0
+        ? 100.0f * g_state.busy_ticks / total : 0.0f;
+}
+
+static int wait_for_tick(int *last_seen) {
+    pthread_mutex_lock(&g_state.lock);
+    while (g_state.simulation_running && g_state.current_tick <= *last_seen) {
+        struct timespec abs;
+        if (clock_gettime(CLOCK_MONOTONIC, &abs) != 0) {
+            fprintf(stderr, "ERROR: clock_gettime failed\n");
+            pthread_mutex_unlock(&g_state.lock);
+            return -1;
+        }
+        long timeout_ms = 2L * g_config.tick_ms;
+        if (timeout_ms < 20) timeout_ms = 20;
+        abs.tv_sec += timeout_ms / 1000;
+        abs.tv_nsec += (timeout_ms % 1000) * 1000000L;
+        if (abs.tv_nsec >= 1000000000L) {
+            abs.tv_sec++;
+            abs.tv_nsec -= 1000000000L;
+        }
+        int result = pthread_cond_timedwait(&g_state.tick_cv, &g_state.lock, &abs);
+        if (result != 0 && result != ETIMEDOUT) {
+            fprintf(stderr, "ERROR: pthread_cond_timedwait failed: %s\n",
+                    strerror(result));
+            pthread_mutex_unlock(&g_state.lock);
+            return -1;
+        }
+    }
+    if (!g_state.simulation_running) {
+        pthread_mutex_unlock(&g_state.lock);
+        return -1;
+    }
+    int elapsed = g_state.current_tick - *last_seen;
+    *last_seen = g_state.current_tick;
+    pthread_mutex_unlock(&g_state.lock);
+    return elapsed;
+}
+
+static void admit_arrivals(int *next_arrival_tick) {
+    pthread_mutex_lock(&g_state.lock);
+    int tick = g_state.current_tick;
+    pthread_mutex_unlock(&g_state.lock);
+
+    wake_waiting_processes(tick);
+    if (tick < *next_arrival_tick) return;
+
+    pthread_mutex_lock(&g_state.lock);
+    int added = g_state.process_count;
+    pthread_mutex_unlock(&g_state.lock);
+    if (added < g_config.num_students) {
+        int batch = (g_config.num_students - added < g_config.arrival_batch)
+            ? g_config.num_students - added : g_config.arrival_batch;
+        for (int i = 0; i < batch; i++) {
+            PCB p = {
+                .pid = added + i + 1,
+                .state = NEW,
+                .priority = 1,
+                .total_time = g_config.exam_duration,
+                .remaining_time = g_config.exam_duration - rng_uniform(10),
+                .waiting_time = 0,
+                .turnaround_time = 0,
+                .pages_used = 0
+            };
+            scheduler_add_process(p);
+        }
+    }
+    *next_arrival_tick = tick - (tick % g_config.arrival_interval)
+                         + g_config.arrival_interval;
+}
+
+static int dispatch_one(const char *algorithm, int *last_seen,
+                        int *next_arrival_tick) {
     int slot;
     int selected_index = -1;
     int previous_pid;
@@ -194,7 +308,6 @@ static int dispatch_one(const char *algorithm, int *busy) {
         g_state.running_pid = -1;
         pthread_mutex_unlock(&g_state.lock);
         pthread_mutex_unlock(&rq_lock);
-        *busy = 0;
         return 0;
     }
 
@@ -204,7 +317,6 @@ static int dispatch_one(const char *algorithm, int *busy) {
         if (g_config.sched_algo == ROUND_ROBIN) rr_remove(selected_index);
         pthread_mutex_unlock(&g_state.lock);
         pthread_mutex_unlock(&rq_lock);
-        *busy = 0;
         return 0;
     }
     if (p->first_run_tick < 0) p->first_run_tick = g_state.current_tick;
@@ -216,24 +328,43 @@ static int dispatch_one(const char *algorithm, int *busy) {
     pthread_mutex_unlock(&g_state.lock);
     pthread_mutex_unlock(&rq_lock);
 
-    usleep((useconds_t)g_config.tick_ms * 500);
+    int pid = p->pid;
+    int tick_start;
+    int work_left;
+    int interrupted = 0;
+    pthread_mutex_lock(&g_state.lock);
+    tick_start = g_state.current_tick;
+    work_left = g_config.time_quantum < p->remaining_time
+        ? g_config.time_quantum : p->remaining_time;
+    pthread_mutex_unlock(&g_state.lock);
+
+    while (work_left > 0) {
+        int elapsed = wait_for_tick(last_seen);
+        if (elapsed < 0) return -1;
+        int step = elapsed < work_left ? elapsed : work_left;
+        pthread_mutex_lock(&g_state.lock);
+        p = &g_state.processes[slot];
+        if (p->state != RUNNING) {
+            interrupted = 1;
+            g_state.idle_ticks += elapsed;
+        } else {
+            p->remaining_time -= step;
+            p->cpu_ticks += step;
+            work_left -= step;
+            g_state.busy_ticks += step;
+            g_state.idle_ticks += elapsed - step;
+        }
+        update_cpu_utilization();
+        pthread_mutex_unlock(&g_state.lock);
+        admit_arrivals(next_arrival_tick);
+        if (interrupted) break;
+    }
 
     int done = 0;
-    int pid = p->pid;
     pthread_mutex_lock(&g_state.lock);
     p = &g_state.processes[slot];
-    if (p->state == RUNNING) {
-        int work = g_config.time_quantum < p->remaining_time
-            ? g_config.time_quantum : p->remaining_time;
-        p->remaining_time -= g_config.time_quantum;
-        p->cpu_ticks += work;
-        if (p->remaining_time <= 0) {
-            done = 1;
-        } else {
-            process_set_state(p, READY);
-            p->last_ready_tick = g_state.current_tick;
-        }
-    }
+    if (!interrupted && p->state == RUNNING && p->remaining_time <= 0)
+        done = 1;
     pthread_mutex_unlock(&g_state.lock);
 
     if (done) {
@@ -258,8 +389,12 @@ static int dispatch_one(const char *algorithm, int *busy) {
     pthread_mutex_unlock(&g_state.lock);
     pthread_mutex_unlock(&rq_lock);
 
-    *busy = 1;
-    return 0;
+    const char *reason = interrupted ? "TIMED_OUT" : done ? "DONE" : "QUANTUM";
+    pthread_mutex_lock(&g_state.lock);
+    int tick_end = g_state.current_tick;
+    pthread_mutex_unlock(&g_state.lock);
+    trace_record(tick_start, tick_end, pid, reason);
+    return 1;
 }
 
 void *scheduler_thread(void *arg) {
@@ -267,58 +402,54 @@ void *scheduler_thread(void *arg) {
     rng_init_thread(1);
     log_event("INFO", "SCHEDULER", "Scheduler thread started");
 
-    int total_iterations = 0;
-    int busy_iterations = 0;
+    trace_count = 0;
+    trace_overflows = 0;
     int next_arrival_tick = 0;
+    int last_seen;
+    int idle_trace_start = -1;
+    pthread_mutex_lock(&g_state.lock);
+    last_seen = g_state.current_tick;
+    pthread_mutex_unlock(&g_state.lock);
     while (1) {
-        pthread_mutex_lock(&g_state.lock);
-        int running = g_state.simulation_running;
-        int tick = g_state.current_tick;
-        pthread_mutex_unlock(&g_state.lock);
-        if (!running) break;
-
-        wake_waiting_processes(tick);
-
-        if (tick >= next_arrival_tick) {
+        admit_arrivals(&next_arrival_tick);
+        int dispatch_result = dispatch_one(
+            g_config.sched_algo == ROUND_ROBIN ? "RR" : "PRIORITY",
+            &last_seen, &next_arrival_tick);
+        if (dispatch_result < 0)
+            break;
+        if (dispatch_result == 0) {
             pthread_mutex_lock(&g_state.lock);
-            int added = g_state.process_count;
+            g_state.running_pid = -1;
             pthread_mutex_unlock(&g_state.lock);
-            if (added < g_config.num_students) {
-                int batch = (g_config.num_students - added < g_config.arrival_batch)
-                    ? g_config.num_students - added : g_config.arrival_batch;
-                for (int i = 0; i < batch; i++) {
-                    PCB p = {
-                        .pid = added + i + 1,
-                        .state = NEW,
-                        .priority = 1,
-                        .total_time = g_config.exam_duration,
-                        .remaining_time = g_config.exam_duration - rng_uniform(10),
-                        .waiting_time = 0,
-                        .turnaround_time = 0,
-                        .pages_used = 0
-                    };
-                    scheduler_add_process(p);
-                }
+            if (idle_trace_start < 0) {
+                pthread_mutex_lock(&g_state.lock);
+                idle_trace_start = g_state.current_tick;
+                pthread_mutex_unlock(&g_state.lock);
             }
-            next_arrival_tick = tick - (tick % g_config.arrival_interval)
-                              + g_config.arrival_interval;
+            int elapsed = wait_for_tick(&last_seen);
+            if (elapsed < 0) break;
+            pthread_mutex_lock(&g_state.lock);
+            g_state.idle_ticks += elapsed;
+            update_cpu_utilization();
+            pthread_mutex_unlock(&g_state.lock);
+            continue;
         }
-
-        int busy = 0;
-        total_iterations++;
-        if (g_config.sched_algo == ROUND_ROBIN)
-            dispatch_one("RR", &busy);
-        else
-            dispatch_one("PRIORITY", &busy);
-        busy_iterations += busy;
-
-        pthread_mutex_lock(&g_state.lock);
-        g_state.cpu_utilization = total_iterations > 0
-            ? 100.0f * busy_iterations / total_iterations : 0.0f;
-        pthread_mutex_unlock(&g_state.lock);
-        usleep((useconds_t)g_config.tick_ms * 1000);
+        if (idle_trace_start >= 0) {
+            pthread_mutex_lock(&g_state.lock);
+            int idle_trace_end = g_state.current_tick;
+            pthread_mutex_unlock(&g_state.lock);
+            trace_record(idle_trace_start, idle_trace_end, 0, "IDLE");
+            idle_trace_start = -1;
+        }
     }
 
+    if (idle_trace_start >= 0) {
+        pthread_mutex_lock(&g_state.lock);
+        int idle_trace_end = g_state.current_tick;
+        pthread_mutex_unlock(&g_state.lock);
+        trace_record(idle_trace_start, idle_trace_end, 0, "IDLE");
+    }
+    trace_write();
     log_event("INFO", "SCHEDULER", "Scheduler thread exiting");
     return NULL;
 }

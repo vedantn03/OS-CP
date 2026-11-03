@@ -22,6 +22,7 @@ void config_load_defaults(Config *cfg) {
     cfg->arrival_interval = 10;
     cfg->strict          = 0;
     cfg->tick_ms         = TIME_TICK_MS;
+    cfg->trace            = 0;
     cfg->workload        = WORKLOAD_LEGACY;
 }
 
@@ -78,6 +79,7 @@ int config_parse_args(Config *cfg, int argc, char *argv[]) {
         else if (strcmp(argv[i], "--headless") == 0) cfg->headless_mode = 1;
         else if (strcmp(argv[i], "--strict")   == 0) cfg->strict = 1;
         else if (strcmp(argv[i], "--tick-ms") == 0 && i+1 < argc) cfg->tick_ms = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--trace")    == 0) cfg->trace = 1;
         else if (strcmp(argv[i], "--workload") == 0 && i+1 < argc)
             cfg->workload = (strcmp(argv[++i], "INTERACTIVE") == 0)
                 ? WORKLOAD_INTERACTIVE : WORKLOAD_LEGACY;
@@ -99,6 +101,7 @@ int config_parse_args(Config *cfg, int argc, char *argv[]) {
             printf("  --seed N        Random seed\n");
             printf("  --strict        Exit with status 3 if invariants fail\n");
             printf("  --tick-ms N     Tick duration in milliseconds\n");
+            printf("  --trace         Write scheduler trace to output/trace.csv\n");
             printf("  --workload LEGACY|INTERACTIVE  Workload behavior\n");
             exit(EXIT_SUCCESS);
         }
@@ -146,6 +149,7 @@ void config_print(Config *cfg) {
     printf("│ Arrival Batch: %-26d │\n", cfg->arrival_batch);
     printf("│ Arrival Every: %-26d │\n", cfg->arrival_interval);
     printf("│ Tick (ms)    : %-26d │\n", cfg->tick_ms);
+    printf("│ Trace        : %-26s │\n", cfg->trace ? "ON" : "OFF");
     printf("│ Workload     : %-26s │\n",
            cfg->workload == WORKLOAD_INTERACTIVE ? "INTERACTIVE" : "LEGACY");
     printf("│ Buffer       : %-26d │\n", cfg->buffer_capacity);

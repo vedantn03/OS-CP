@@ -1,0 +1,5 @@
+tick_start,tick_end,pid,reason
+1,6,3,QUANTUM
+6,11,1,QUANTUM
+11,16,2,QUANTUM
+16,145,0,IDLE

@@ -13,3 +13,5 @@ interactive workloads.
   validation for phases 1.5–2.2.
 - 2026-11-03: Added deterministic per-thread RNG streams and shared simulation
   clock sleep/notification infrastructure.
+- 2026-11-03: Made scheduler CPU accounting tick-driven with utilization,
+  invariants, and optional dispatch tracing.

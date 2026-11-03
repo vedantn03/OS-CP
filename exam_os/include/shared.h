@@ -99,6 +99,7 @@ typedef struct {
     int       arrival_interval;
     int       strict;
     int       tick_ms;
+    int       trace;
     WorkloadKind workload;
 } Config;
 
@@ -109,6 +110,8 @@ typedef struct {
     float cpu_utilization;
     int   context_switches;
     int   dispatches;
+    int   busy_ticks;
+    int   idle_ticks;
     int   completed_processes;
     int   finished_ok;
     int   flushed_records;
