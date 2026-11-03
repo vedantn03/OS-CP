@@ -33,6 +33,7 @@ int invariants_run(void) {
     int final_tick;
     int block_events;
     int wakeups;
+    int process_levels_ok = 1;
 
     invariant_file = fopen("output/invariants.txt", "w");
     failures = 0;
@@ -106,6 +107,18 @@ int invariants_run(void) {
 
     snprintf(msg, sizeof(msg), "wakeups=%d blocked=%d", wakeups, block_events);
     report_check("I9", wakeups <= block_events, msg);
+
+    for (int i = 0; i < process_count; i++) {
+        if (processes[i].level < 0 || processes[i].level >= g_config.mlfq_levels ||
+            processes[i].priority < 1 || processes[i].priority > g_config.priority_levels) {
+            process_levels_ok = 0;
+            snprintf(msg, sizeof(msg), "PID %d level=%d priority=%d",
+                     processes[i].pid, processes[i].level, processes[i].priority);
+            break;
+        }
+    }
+    if (process_levels_ok) msg[0] = '\0';
+    report_check("I10", process_levels_ok, msg);
 
     if (invariant_file) fclose(invariant_file);
     invariant_file = NULL;

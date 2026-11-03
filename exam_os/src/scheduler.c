@@ -67,10 +67,22 @@ static void rq_remove_at(int index) {
     rq_size--;
 }
 
+/* Caller holds rq_lock and g_state.lock. */
+static int effective_priority(int slot) {
+    PCB *p = &g_state.processes[slot];
+    int priority = p->priority;
+    if (g_config.aging_interval > 0)
+        priority += (g_state.current_tick - p->last_ready_tick) /
+            g_config.aging_interval;
+    return priority > g_config.priority_levels
+        ? g_config.priority_levels : priority;
+}
+
 /* Caller holds rq_lock and g_state.lock. Returns the queue position. */
 static int rq_select(SchedAlgo algo) {
     int selected = -1;
     int selected_value = 0;
+    int selected_level = 0;
     for (int i = 0; i < rq_size;) {
         int slot = ready_queue[i];
         if (slot < 0 || slot >= g_state.process_count ||
@@ -81,7 +93,18 @@ static int rq_select(SchedAlgo algo) {
         int value = g_config.workload == WORKLOAD_INTERACTIVE
             ? g_state.processes[slot].burst_remaining
             : g_state.processes[slot].remaining_time;
-        if (algo == SJF || algo == SRTF || algo == PRIORITY) {
+        if (algo == MLFQ) {
+            if (selected < 0 || g_state.processes[slot].level < selected_level) {
+                selected = i;
+                selected_level = g_state.processes[slot].level;
+            }
+        } else if (algo == PRIO) {
+            value = effective_priority(slot);
+            if (selected < 0 || value > selected_value) {
+                selected = i;
+                selected_value = value;
+            }
+        } else if (algo == SJF || algo == SRTF || algo == PRIORITY) {
             if (selected < 0 || value < selected_value) {
                 selected = i;
                 selected_value = value;
@@ -111,6 +134,22 @@ static void enqueue_slots(const int *slots, int count) {
     }
     pthread_mutex_unlock(&g_state.lock);
     pthread_mutex_unlock(&rq_lock);
+}
+
+static void apply_mlfq_boost(int *next_boost_tick) {
+    if (g_config.sched_algo != MLFQ || g_config.mlfq_boost <= 0)
+        return;
+    pthread_mutex_lock(&g_state.lock);
+    if (g_state.current_tick < *next_boost_tick) {
+        pthread_mutex_unlock(&g_state.lock);
+        return;
+    }
+    for (int i = 0; i < g_state.process_count; i++)
+        if (g_state.processes[i].state != TERMINATED)
+            g_state.processes[i].level = 0;
+    g_state.boosts++;
+    *next_boost_tick = g_state.current_tick + g_config.mlfq_boost;
+    pthread_mutex_unlock(&g_state.lock);
 }
 
 static void wake_sleepers(void) {
@@ -166,6 +205,8 @@ void scheduler_add_process(PCB process) {
         process.burst_remaining = 0;
     process.wake_tick = -1;
     process.bursts_done = 0;
+    process.priority = 1 + rng_uniform(g_config.priority_levels);
+    process.level = 0;
     process.deadline_tick = now +
         (g_config.session_limit > 0 ? g_config.session_limit
          : g_config.workload == WORKLOAD_INTERACTIVE
@@ -231,11 +272,12 @@ static int wait_for_tick(int *last_seen) {
     return elapsed;
 }
 
-static void admit_arrivals(int *next_arrival_tick) {
+static void admit_arrivals(int *next_arrival_tick, int *next_boost_tick) {
     pthread_mutex_lock(&g_state.lock);
     int tick = g_state.current_tick;
     pthread_mutex_unlock(&g_state.lock);
     wake_sleepers();
+    apply_mlfq_boost(next_boost_tick);
     if (tick < *next_arrival_tick) return;
     pthread_mutex_lock(&g_state.lock);
     int added = g_state.process_count;
@@ -264,11 +306,12 @@ static void admit_arrivals(int *next_arrival_tick) {
 }
 
 static int is_quantum_sliced(SchedAlgo algo) {
-    return algo == ROUND_ROBIN || algo == PRIORITY;
+    return algo == ROUND_ROBIN || algo == PRIORITY || algo == PRIO ||
+           algo == MLFQ;
 }
 
 static int dispatch_one(int *last_seen, int *next_arrival_tick,
-                        int *last_dispatched_pid) {
+                        int *next_boost_tick, int *last_dispatched_pid) {
     pthread_mutex_lock(&rq_lock);
     pthread_mutex_lock(&g_state.lock);
     int selected_index = rq_select(g_config.sched_algo);
@@ -298,7 +341,7 @@ static int dispatch_one(int *last_seen, int *next_arrival_tick,
             int step = elapsed < g_config.switch_cost - spent
                 ? elapsed : g_config.switch_cost - spent;
             for (int i = 0; i < step; i++) {
-                admit_arrivals(next_arrival_tick);
+                admit_arrivals(next_arrival_tick, next_boost_tick);
                 pthread_mutex_lock(&g_state.lock);
                 g_state.overhead_ticks++;
                 update_cpu_utilization();
@@ -333,11 +376,15 @@ static int dispatch_one(int *last_seen, int *next_arrival_tick,
     *last_dispatched_pid = pid;
     int tick_start = g_state.current_tick;
     int work_left = p->remaining_time;
-    if (is_quantum_sliced(g_config.sched_algo) && work_left > g_config.time_quantum)
-        work_left = g_config.time_quantum;
+    int quantum = g_config.time_quantum;
+    if (g_config.sched_algo == MLFQ)
+        quantum <<= p->level;
+    if (is_quantum_sliced(g_config.sched_algo) && work_left > quantum)
+        work_left = quantum;
     if (g_config.workload == WORKLOAD_INTERACTIVE &&
         work_left > p->burst_remaining)
         work_left = p->burst_remaining;
+    int initial_work = work_left;
     pthread_mutex_unlock(&g_state.lock);
 
     int preempted = 0;
@@ -359,13 +406,25 @@ static int dispatch_one(int *last_seen, int *next_arrival_tick,
         }
         update_cpu_utilization();
         pthread_mutex_unlock(&g_state.lock);
-        admit_arrivals(next_arrival_tick);
-        if (g_config.sched_algo == SRTF && work_left > 0) {
+        admit_arrivals(next_arrival_tick, next_boost_tick);
+        if ((g_config.sched_algo == SRTF ||
+             (g_config.sched_algo == PRIO && g_config.preempt) ||
+             g_config.sched_algo == MLFQ) && work_left > 0) {
             pthread_mutex_lock(&rq_lock);
             pthread_mutex_lock(&g_state.lock);
-            int best = rq_select(SRTF);
-            if (best >= 0 && g_state.processes[ready_queue[best]].remaining_time <
-                    g_state.processes[slot].remaining_time) {
+            int best = rq_select(g_config.sched_algo == MLFQ ? MLFQ :
+                                 g_config.sched_algo == PRIO ? PRIO : SRTF);
+            int should_preempt = 0;
+            if (best >= 0 && g_config.sched_algo == MLFQ)
+                should_preempt = g_state.processes[ready_queue[best]].level <
+                    g_state.processes[slot].level;
+            else if (best >= 0 && g_config.sched_algo == PRIO)
+                should_preempt = effective_priority(ready_queue[best]) >
+                    g_state.processes[slot].priority;
+            else if (best >= 0)
+                should_preempt = g_state.processes[ready_queue[best]].remaining_time <
+                    g_state.processes[slot].remaining_time;
+            if (should_preempt) {
                 process_set_state(&g_state.processes[slot], READY);
                 g_state.processes[slot].last_ready_tick = g_state.current_tick;
                 rq_push(slot);
@@ -399,6 +458,12 @@ static int dispatch_one(int *last_seen, int *next_arrival_tick,
             else
                 g_state.throttled_submissions++;
         } else {
+            if (g_config.sched_algo == MLFQ && initial_work == quantum &&
+                p->remaining_time > 0)
+                if (p->level < g_config.mlfq_levels - 1) {
+                    p->level++;
+                    g_state.demotions++;
+                }
             process_set_state(p, READY);
             p->last_ready_tick = g_state.current_tick;
         }
@@ -444,6 +509,7 @@ void *scheduler_thread(void *arg) {
     trace_count = 0;
     trace_overflows = 0;
     int next_arrival_tick = 0;
+    int next_boost_tick = g_config.mlfq_boost > 0 ? g_config.mlfq_boost : 0;
     int last_seen;
     int last_dispatched_pid = -1;
     int idle_trace_start = -1;
@@ -451,9 +517,9 @@ void *scheduler_thread(void *arg) {
     last_seen = g_state.current_tick;
     pthread_mutex_unlock(&g_state.lock);
     while (1) {
-        admit_arrivals(&next_arrival_tick);
+        admit_arrivals(&next_arrival_tick, &next_boost_tick);
         int result = dispatch_one(&last_seen, &next_arrival_tick,
-                                  &last_dispatched_pid);
+                                  &next_boost_tick, &last_dispatched_pid);
         if (result < 0) break;
         if (result == 0) {
             pthread_mutex_lock(&g_state.lock);
@@ -466,7 +532,7 @@ void *scheduler_thread(void *arg) {
             g_state.idle_ticks += elapsed;
             update_cpu_utilization();
             pthread_mutex_unlock(&g_state.lock);
-            admit_arrivals(&next_arrival_tick);
+            admit_arrivals(&next_arrival_tick, &next_boost_tick);
         } else if (idle_trace_start >= 0) {
             pthread_mutex_lock(&g_state.lock);
             int idle_trace_end = g_state.current_tick;

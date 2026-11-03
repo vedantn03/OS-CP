@@ -22,7 +22,7 @@ typedef enum {
 } ProcessState;
 
 typedef enum {
-    ROUND_ROBIN, PRIORITY, FCFS, SJF, SRTF
+    ROUND_ROBIN, PRIORITY, FCFS, SJF, SRTF, PRIO, MLFQ
 } SchedAlgo;
 
 typedef enum {
@@ -38,6 +38,7 @@ typedef struct {
     int          pid;
     ProcessState state;
     int          priority;        // higher = more urgent
+    int          level;           // MLFQ queue level
     int          total_time;      // total exam duration (ticks)
     int          remaining_time;  // ticks left
     int          waiting_time;
@@ -111,6 +112,11 @@ typedef struct {
     int       think_min;
     int       think_max;
     int       switch_cost;
+    int       priority_levels;
+    int       aging_interval;
+    int       preempt;
+    int       mlfq_levels;
+    int       mlfq_boost;
 } Config;
 
 // ─── System State (shared across all modules) ────────────
@@ -124,6 +130,8 @@ typedef struct {
     int   idle_ticks;
     int   overhead_ticks;
     int   preemptions;
+    int   demotions;
+    int   boosts;
     int   completed_processes;
     int   finished_ok;
     int   flushed_records;

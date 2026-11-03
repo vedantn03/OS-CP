@@ -22,3 +22,5 @@ interactive workloads.
 - 2026-11-03: Added pluggable FCFS, SJF, and SRTF scheduling with a unified
   ready queue, preemption accounting, and configurable context-switch cost;
   PRIORITY retains shortest-remaining-time at dispatch boundaries (legacy name PRIORITY).
+- 2026-11-03: Added static priority scheduling with aging and a multilevel
+  feedback queue with configurable levels, preemption, demotion, and boosts.

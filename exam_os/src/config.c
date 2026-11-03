@@ -22,6 +22,10 @@ int config_parse_sched_algo(const char *value, SchedAlgo *algo) {
         *algo = SJF;
     else if (strcmp(normalized, "SRTF") == 0)
         *algo = SRTF;
+    else if (strcmp(normalized, "PRIO") == 0)
+        *algo = PRIO;
+    else if (strcmp(normalized, "MLFQ") == 0)
+        *algo = MLFQ;
     else
         return 0;
     return 1;
@@ -34,6 +38,8 @@ const char *sched_algo_name(SchedAlgo algo) {
     case FCFS: return "FCFS";
     case SJF: return "SJF";
     case SRTF: return "SRTF";
+    case PRIO: return "PRIO";
+    case MLFQ: return "MLFQ";
     default: return "UNKNOWN";
     }
 }
@@ -64,6 +70,11 @@ void config_load_defaults(Config *cfg) {
     cfg->think_min       = 4;
     cfg->think_max       = 12;
     cfg->switch_cost     = 0;
+    cfg->priority_levels = 3;
+    cfg->aging_interval  = 25;
+    cfg->preempt         = 1;
+    cfg->mlfq_levels     = 3;
+    cfg->mlfq_boost      = 100;
 }
 
 int config_parse_file(Config *cfg, const char *filepath) {
@@ -95,6 +106,11 @@ int config_parse_file(Config *cfg, const char *filepath) {
         else if (strcmp(key, "THINK_MIN")        == 0 && numeric) cfg->think_min = (int)number;
         else if (strcmp(key, "THINK_MAX")        == 0 && numeric) cfg->think_max = (int)number;
         else if (strcmp(key, "SWITCH_COST")     == 0 && numeric) cfg->switch_cost     = (int)number;
+        else if (strcmp(key, "PRIORITY_LEVELS") == 0 && numeric) cfg->priority_levels = (int)number;
+        else if (strcmp(key, "AGING_INTERVAL")  == 0 && numeric) cfg->aging_interval  = (int)number;
+        else if (strcmp(key, "PREEMPT")         == 0 && numeric) cfg->preempt         = (int)number;
+        else if (strcmp(key, "MLFQ_LEVELS")     == 0 && numeric) cfg->mlfq_levels     = (int)number;
+        else if (strcmp(key, "MLFQ_BOOST")      == 0 && numeric) cfg->mlfq_boost      = (int)number;
         else if (strcmp(key, "WORKLOAD")         == 0) {
             for (char *p = val; *p; p++) *p = (char)toupper((unsigned char)*p);
             if (strcmp(val, "INTERACTIVE") == 0)
@@ -108,7 +124,7 @@ int config_parse_file(Config *cfg, const char *filepath) {
         }
         else if (strcmp(key, "SCHEDULING_ALGO")  == 0) {
             if (!config_parse_sched_algo(val, &cfg->sched_algo)) {
-                fprintf(stderr, "ERROR: SCHEDULING_ALGO must be RR, ROUND_ROBIN, PRIORITY, FCFS, SJF, or SRTF\n");
+                fprintf(stderr, "ERROR: SCHEDULING_ALGO must be RR, ROUND_ROBIN, PRIORITY, FCFS, SJF, SRTF, PRIO, or MLFQ\n");
                 fclose(f);
                 return 0;
             }
@@ -133,12 +149,22 @@ int config_parse_args(Config *cfg, int argc, char *argv[]) {
         else if (strcmp(argv[i], "--arrival-interval") == 0 && i+1 < argc) cfg->arrival_interval = atoi(argv[++i]);
         else if (strcmp(argv[i], "--algo")     == 0 && i+1 < argc) {
             if (!config_parse_sched_algo(argv[++i], &cfg->sched_algo)) {
-                fprintf(stderr, "ERROR: --algo must be RR, ROUND_ROBIN, PRIORITY, FCFS, SJF, or SRTF\n");
+                fprintf(stderr, "ERROR: --algo must be RR, ROUND_ROBIN, PRIORITY, FCFS, SJF, SRTF, PRIO, or MLFQ\n");
                 return 0;
             }
         }
         else if (strcmp(argv[i], "--switch-cost") == 0 && i+1 < argc)
             cfg->switch_cost = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--priority-levels") == 0 && i+1 < argc)
+            cfg->priority_levels = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--aging") == 0 && i+1 < argc)
+            cfg->aging_interval = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--preempt") == 0 && i+1 < argc)
+            cfg->preempt = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--mlfq-levels") == 0 && i+1 < argc)
+            cfg->mlfq_levels = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--mlfq-boost") == 0 && i+1 < argc)
+            cfg->mlfq_boost = atoi(argv[++i]);
         else if (strcmp(argv[i], "--page")     == 0 && i+1 < argc)
             cfg->page_algo  = (strcmp(argv[++i], "FIFO") == 0) ? FIFO : LRU;
         else if (strcmp(argv[i], "--demo")     == 0) cfg->demo_mode = 1;
@@ -176,8 +202,13 @@ int config_parse_args(Config *cfg, int argc, char *argv[]) {
             printf("  --arrival-batch N    Processes added per arrival batch\n");
             printf("  --arrival-interval N Ticks between arrival batches\n");
             printf("  --buffer N     I/O buffer capacity\n");
-            printf("  --algo RR|ROUND_ROBIN|PRIORITY|FCFS|SJF|SRTF  Scheduling algorithm\n");
+            printf("  --algo RR|ROUND_ROBIN|PRIORITY|FCFS|SJF|SRTF|PRIO|MLFQ  Scheduling algorithm\n");
             printf("  --switch-cost N  Context-switch overhead in ticks (0..50)\n");
+            printf("  --priority-levels N  Static priority levels (1..9)\n");
+            printf("  --aging N       Priority aging interval in ticks (0 disables aging)\n");
+            printf("  --preempt 0|1   Enable PRIO preemption\n");
+            printf("  --mlfq-levels N  MLFQ levels (2..6)\n");
+            printf("  --mlfq-boost N  MLFQ boost interval in ticks (0 disables boosts)\n");
             printf("  --page FIFO|LRU     Page replacement algorithm\n");
             printf("  --headless      Disable dashboard\n");
             printf("  --demo          Enable demo mode\n");
@@ -225,6 +256,16 @@ int config_validate(const Config *cfg, char *error, size_t error_size) {
         snprintf(error, error_size, "TICK_MS must be 1..60000");
     else if (cfg->switch_cost < 0 || cfg->switch_cost > 50)
         snprintf(error, error_size, "SWITCH_COST must be 0..50");
+    else if (cfg->priority_levels < 1 || cfg->priority_levels > 9)
+        snprintf(error, error_size, "PRIORITY_LEVELS must be 1..9");
+    else if (cfg->aging_interval < 0)
+        snprintf(error, error_size, "AGING_INTERVAL must be non-negative");
+    else if (cfg->preempt < 0 || cfg->preempt > 1)
+        snprintf(error, error_size, "PREEMPT must be 0 or 1");
+    else if (cfg->mlfq_levels < 2 || cfg->mlfq_levels > 6)
+        snprintf(error, error_size, "MLFQ_LEVELS must be 2..6");
+    else if (cfg->mlfq_boost < 0)
+        snprintf(error, error_size, "MLFQ_BOOST must be non-negative");
     else if (cfg->demand_min < 1)
         snprintf(error, error_size, "DEMAND_MIN must be at least 1");
     else if (cfg->demand_max < cfg->demand_min)
@@ -264,6 +305,11 @@ void config_print(Config *cfg) {
     printf("│ Buffer       : %-26d │\n", cfg->buffer_capacity);
     printf("│ Scheduling   : %-26s │\n", sched_algo_name(cfg->sched_algo));
     printf("│ Switch Cost  : %-26d │\n", cfg->switch_cost);
+    printf("│ Priority Lvls: %-26d │\n", cfg->priority_levels);
+    printf("│ Aging        : %-26d │\n", cfg->aging_interval);
+    printf("│ Preempt      : %-26d │\n", cfg->preempt);
+    printf("│ MLFQ Levels  : %-26d │\n", cfg->mlfq_levels);
+    printf("│ MLFQ Boost   : %-26d │\n", cfg->mlfq_boost);
     printf("│ Page Replace : %-26s │\n", cfg->page_algo  == LRU      ? "LRU"      : "FIFO");
     printf("│ Demo Mode    : %-26s │\n", cfg->demo_mode  ? "ON" : "OFF");
     printf("│ Headless     : %-26s │\n", cfg->headless_mode ? "ON" : "OFF");

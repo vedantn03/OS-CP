@@ -174,6 +174,39 @@ overhead=$(grep 'Overhead Ticks' output/summary.txt | sed 's/.*: *//; s/[^0-9].*
 [ "$overhead" -gt 0 ] || fail T22 "switch cost produced no overhead ticks"
 pass T22
 
+for ALGO in PRIO MLFQ
+do
+    "$BIN" --headless --strict --tick-ms 10 --workload INTERACTIVE \
+        --students 12 --duration 300 --algo "$ALGO" --seed 21 >"$TMP/t23-$ALGO.out" 2>&1 ||
+        fail T23 "$ALGO interactive run failed"
+    if grep -q '^FAIL ' output/invariants.txt; then
+        fail T23 "$ALGO interactive invariant failure"
+    fi
+    completed=$(grep 'Completed Exams' output/summary.txt | sed 's/.*: *//; s/[^0-9].*//')
+    [ "$completed" -ge 8 ] || fail T23 "$ALGO completed fewer than 8 exams"
+done
+pass T23
+
+"$BIN" --headless --strict --tick-ms 10 --workload INTERACTIVE \
+    --students 12 --duration 300 --algo PRIO --preempt 0 --seed 21 >"$TMP/t24.out" 2>&1 ||
+    fail T24 "PRIO non-preemptive run failed"
+pass T24
+
+"$BIN" --headless --strict --tick-ms 10 --workload INTERACTIVE \
+    --students 12 --duration 300 --algo PRIO --aging 0 --seed 21 >"$TMP/t25.out" 2>&1 ||
+    fail T25 "PRIO no-aging run failed"
+pass T25
+
+"$BIN" --headless --strict --tick-ms 10 --workload INTERACTIVE \
+    --students 12 --duration 300 --algo MLFQ --mlfq-boost 0 --seed 21 >"$TMP/t26.out" 2>&1 ||
+    fail T26 "MLFQ no-boost run failed"
+pass T26
+
+if "$BIN" --headless --algo BOGUS >"$TMP/t27.out" 2>&1; then
+    fail T27 "invalid algorithm was accepted"
+fi
+pass T27
+
 make clean >/dev/null
 pass T8
-printf 'All T1-T22 tests passed.\n'
+printf 'All T1-T27 tests passed.\n'

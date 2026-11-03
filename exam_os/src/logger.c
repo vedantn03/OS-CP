@@ -148,6 +148,10 @@ void logger_write_report() {
     fprintf(f, "║   Idle Ticks        : %-18d ║\n", g_state.idle_ticks);
     fprintf(f, "║   Overhead Ticks    : %-18d ║\n", g_state.overhead_ticks);
     fprintf(f, "║   Preemptions       : %-18d ║\n", g_state.preemptions);
+    fprintf(f, "║   MLFQ Demotions    : %-18d ║\n",
+            g_config.sched_algo == MLFQ ? g_state.demotions : 0);
+    fprintf(f, "║   MLFQ Boosts       : %-18d ║\n",
+            g_config.sched_algo == MLFQ ? g_state.boosts : 0);
     fprintf(f, "║   CPU Utilization   : %-17.1f%% ║\n", g_state.cpu_utilization);
     fprintf(f, "║   Throughput (per 100 ticks): %-8.1f ║\n",
             g_state.current_tick > 0
