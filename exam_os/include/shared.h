@@ -126,6 +126,8 @@ typedef struct {
     int       write_pct;
     int       thrash_high;
     int       page_trace;
+    int       thrash_control;
+    int       thrash_pause;
 } Config;
 
 // ─── System State (shared across all modules) ────────────
@@ -157,6 +159,9 @@ typedef struct {
     int   dirty_writebacks;
     int   thrash_episodes;
     int   thrashing;
+    int   admission_paused_until_tick;
+    int   deferred_arrival_ticks;
+    int   last_deferral_tick;
 
     // I/O Buffer
     int   buffer_count;

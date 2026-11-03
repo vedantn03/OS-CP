@@ -1,0 +1,7 @@
+frames 1 faults 12
+frames 2 faults 12
+frames 3 faults 9
+frames 4 faults 10
+frames 5 faults 5
+frames 6 faults 5
+frames 7 faults 5

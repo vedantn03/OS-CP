@@ -1,5 +1,6 @@
 # Build artifacts
 exam_os/exam_os
+exam_os/pagesim
 exam_os/*.o
 exam_os/src/*.o
 

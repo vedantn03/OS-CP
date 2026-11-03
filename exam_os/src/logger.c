@@ -179,6 +179,8 @@ void logger_write_report() {
     fprintf(f, "║   Page Fault Rate   : %-17.1f%% ║\n",
             total > 0 ? (double)g_state.page_faults * 100.0 / total : 0.0);
     fprintf(f, "║   Thrash Episodes   : %-18d ║\n", g_state.thrash_episodes);
+    fprintf(f, "║   Deferred Arrival Ticks: %-13d ║\n",
+            g_state.deferred_arrival_ticks);
     fprintf(f, "║   Hit Rate          : %-17.1f%% ║\n", hit_rate);
     fprintf(f, "╠══════════════════════════════════════════╣\n");
     fprintf(f, "║ I/O BUFFER                               ║\n");

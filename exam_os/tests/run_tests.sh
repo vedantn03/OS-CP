@@ -246,6 +246,40 @@ if "$BIN" --headless --ws 99 >"$TMP/bad-ws.out" 2>&1; then
 fi
 pass T33
 
+make pagesim >/dev/null || fail T34 "pagesim build failed"
+fifo=$(./pagesim --algo FIFO --frames 3 --string "7 0 1 2 0 3 0 4 2 3 0 3 2 1 2 0 1 7 0 1" |
+    sed -n 's/^faults: //p')
+lru=$(./pagesim --algo LRU --frames 3 --string "7 0 1 2 0 3 0 4 2 3 0 3 2 1 2 0 1 7 0 1" |
+    sed -n 's/^faults: //p')
+opt=$(./pagesim --algo OPT --frames 3 --string "7 0 1 2 0 3 0 4 2 3 0 3 2 1 2 0 1 7 0 1" |
+    sed -n 's/^faults: //p')
+[ "$fifo" -eq 15 ] && [ "$lru" -eq 12 ] && [ "$opt" -eq 9 ] || fail T34 "pagesim textbook counts"
+pass T34
+
+belady3=$(./pagesim --algo FIFO --frames 3 --string "1 2 3 4 1 2 5 1 2 3 4 5" |
+    sed -n 's/^faults: //p')
+belady4=$(./pagesim --algo FIFO --frames 4 --string "1 2 3 4 1 2 5 1 2 3 4 5" |
+    sed -n 's/^faults: //p')
+[ "$belady3" -eq 9 ] && [ "$belady4" -eq 10 ] || fail T35 "Belady counts"
+pass T35
+
+"$BIN" --headless --strict --tick-ms 10 --workload INTERACTIVE \
+    --students 60 --duration 500 --frames 24 --seed 1 \
+    --thrash-high 35 --thrash-control 1 >"$TMP/thrash-control.out" 2>&1 ||
+    fail T36 "thrash-control run failed"
+deferred=$(grep 'Deferred Arrival Ticks' output/summary.txt | sed 's/.*: *//; s/[^0-9].*//')
+[ "$deferred" -gt 0 ] || fail T36 "thrash control did not defer arrivals"
+if grep -q '^FAIL ' output/invariants.txt; then fail T36 "thrash-control invariant failure"; fi
+pass T36
+
+"$BIN" --headless --strict --tick-ms 10 --workload INTERACTIVE \
+    --students 60 --duration 500 --frames 24 --seed 1 \
+    --thrash-high 35 --thrash-control 0 >"$TMP/no-thrash-control.out" 2>&1 ||
+    fail T37 "no-control run failed"
+deferred=$(grep 'Deferred Arrival Ticks' output/summary.txt | sed 's/.*: *//; s/[^0-9].*//')
+[ "$deferred" -eq 0 ] || fail T37 "disabled thrash control deferred arrivals"
+pass T37
+
 make clean >/dev/null
 pass T8
-printf 'All T1-T33 tests passed.\n'
+printf 'All T1-T37 tests passed.\n'

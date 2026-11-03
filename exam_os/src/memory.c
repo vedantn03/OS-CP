@@ -35,6 +35,7 @@ static int page_trace_warned;
 static int thrash_window[THRASH_WINDOW];
 static int thrash_count;
 static int thrash_position;
+static int last_thrash_pause_tick;
 
 void memory_init(void) {
     total_frames = g_config.memory_frames;
@@ -43,6 +44,7 @@ void memory_init(void) {
     clock_hand = 0;
     thrash_count = 0;
     thrash_position = 0;
+    last_thrash_pause_tick = -1;
     page_trace_count = 0;
     page_trace_warned = 0;
     page_trace_entries = NULL;
@@ -118,16 +120,24 @@ static int thrash_update(void) {
     int faults = 0;
     if (thrash_count < THRASH_WINDOW) return 0;
     for (int i = 0; i < THRASH_WINDOW; i++) faults += thrash_window[i];
+    int entered = 0;
     if (!g_state.thrashing &&
         faults * 100 >= g_config.thrash_high * THRASH_WINDOW) {
         g_state.thrashing = 1;
         g_state.thrash_episodes++;
-        return 1;
+        entered = 1;
     }
     if (g_state.thrashing &&
         faults * 100 < (g_config.thrash_high / 2) * THRASH_WINDOW)
         g_state.thrashing = 0;
-    return 0;
+    if (g_config.thrash_control && g_state.thrashing &&
+        (entered || last_thrash_pause_tick != g_state.current_tick)) {
+        int until = g_state.current_tick + g_config.thrash_pause;
+        if (until > g_state.admission_paused_until_tick)
+            g_state.admission_paused_until_tick = until;
+        last_thrash_pause_tick = g_state.current_tick;
+    }
+    return entered;
 }
 
 static void load_page(int pid, int virtual_page, int frame, int is_write) {

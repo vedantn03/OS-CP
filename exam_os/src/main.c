@@ -34,6 +34,7 @@ static int state_init() {
     g_state.running_pid        = -1;
     g_state.simulation_running =  1;
     g_state.current_tick       =  0;
+    g_state.last_deferral_tick = -1;
     for (int i = 0; i < 3; i++)
         strncpy(g_state.recent_logs[i], "--- no events yet ---", 255);
     int result = pthread_mutex_init(&g_state.lock, NULL);

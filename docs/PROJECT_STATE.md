@@ -39,3 +39,5 @@ threaded simulation is not bit-exact repeatable across runs.
 - 2026-11-03: 2.4: compare harness and gantt.
 - 2026-11-03: Added locality-based paging, CLOCK replacement, dirty-page
   tracking, eviction/thrash counters, and optional page-reference tracing.
+- 2026-11-03: Added offline FIFO/LRU/CLOCK/OPT page simulation, Belady
+  anomaly evidence, page-fault curves, and thrash admission control.

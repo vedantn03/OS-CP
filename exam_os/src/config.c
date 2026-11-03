@@ -104,6 +104,8 @@ void config_load_defaults(Config *cfg) {
     cfg->write_pct       = 30;
     cfg->thrash_high     = 45;
     cfg->page_trace      = 0;
+    cfg->thrash_control  = 0;
+    cfg->thrash_pause    = 40;
 }
 
 int config_parse_file(Config *cfg, const char *filepath) {
@@ -147,6 +149,8 @@ int config_parse_file(Config *cfg, const char *filepath) {
         else if (strcmp(key, "WRITE_PCT")       == 0 && numeric) cfg->write_pct       = (int)number;
         else if (strcmp(key, "THRASH_HIGH")     == 0 && numeric) cfg->thrash_high     = (int)number;
         else if (strcmp(key, "PAGE_TRACE")      == 0 && numeric) cfg->page_trace      = (int)number;
+        else if (strcmp(key, "THRASH_CONTROL")  == 0 && numeric) cfg->thrash_control  = (int)number;
+        else if (strcmp(key, "THRASH_PAUSE")    == 0 && numeric) cfg->thrash_pause    = (int)number;
         else if (strcmp(key, "WORKLOAD")         == 0) {
             for (char *p = val; *p; p++) *p = (char)toupper((unsigned char)*p);
             if (strcmp(val, "INTERACTIVE") == 0)
@@ -244,6 +248,8 @@ int config_parse_args(Config *cfg, int argc, char *argv[]) {
         else if (strcmp(argv[i], "--write-pct") == 0 && i+1 < argc) cfg->write_pct = atoi(argv[++i]);
         else if (strcmp(argv[i], "--thrash-high") == 0 && i+1 < argc) cfg->thrash_high = atoi(argv[++i]);
         else if (strcmp(argv[i], "--page-trace") == 0) cfg->page_trace = 1;
+        else if (strcmp(argv[i], "--thrash-control") == 0 && i+1 < argc) cfg->thrash_control = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--thrash-pause") == 0 && i+1 < argc) cfg->thrash_pause = atoi(argv[++i]);
         else if (strcmp(argv[i], "--help")   == 0) {
             printf("Usage: ./exam_os [options]\n");
             printf("  --students N   Number of students\n");
@@ -269,6 +275,8 @@ int config_parse_args(Config *cfg, int argc, char *argv[]) {
             printf("  --write-pct N     Write percentage (0..100)\n");
             printf("  --thrash-high N   Thrash threshold percentage (1..100)\n");
             printf("  --page-trace      Write page reference trace\n");
+            printf("  --thrash-control N  Pause arrivals during thrashing (0 or 1)\n");
+            printf("  --thrash-pause N  Arrival pause duration in ticks (1..1000)\n");
             printf("  --headless      Disable dashboard\n");
             printf("  --demo          Enable demo mode\n");
             printf("  --seed N        Random seed\n");
@@ -339,6 +347,10 @@ int config_validate(const Config *cfg, char *error, size_t error_size) {
         snprintf(error, error_size, "THRASH_HIGH must be 1..100");
     else if (cfg->page_trace < 0 || cfg->page_trace > 1)
         snprintf(error, error_size, "PAGE_TRACE must be 0 or 1");
+    else if (cfg->thrash_control < 0 || cfg->thrash_control > 1)
+        snprintf(error, error_size, "THRASH_CONTROL must be 0 or 1");
+    else if (cfg->thrash_pause < 1 || cfg->thrash_pause > 1000)
+        snprintf(error, error_size, "THRASH_PAUSE must be 1..1000");
     else if (cfg->demand_min < 1)
         snprintf(error, error_size, "DEMAND_MIN must be at least 1");
     else if (cfg->demand_max < cfg->demand_min)
@@ -391,6 +403,8 @@ void config_print(Config *cfg) {
     printf("│ Write %%      : %-26d │\n", cfg->write_pct);
     printf("│ Thrash High  : %-26d │\n", cfg->thrash_high);
     printf("│ Page Trace   : %-26s │\n", cfg->page_trace ? "ON" : "OFF");
+    printf("│ Thrash Ctrl  : %-26d │\n", cfg->thrash_control);
+    printf("│ Thrash Pause : %-26d │\n", cfg->thrash_pause);
     printf("│ Demo Mode    : %-26s │\n", cfg->demo_mode  ? "ON" : "OFF");
     printf("│ Headless     : %-26s │\n", cfg->headless_mode ? "ON" : "OFF");
     printf("└─────────────────────────────────────────┘\n");

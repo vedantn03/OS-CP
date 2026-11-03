@@ -23,7 +23,7 @@ $(OUT): $(SRC)
 	$(CC) $(CFLAGS) -o $(OUT) $(SRC) $(LDFLAGS)
 
 clean:
-	rm -f $(OUT) $(OUT)_asan $(OUT)_tsan output/*.txt output/*.json
+	rm -f $(OUT) $(OUT)_asan $(OUT)_tsan pagesim output/*.txt output/*.json
 
 run: all
 	./$(OUT)
@@ -50,8 +50,12 @@ help:
 	@echo "make test      Run the test suite"
 	@echo "make compare   Generate scheduler comparison results"
 	@echo "make gantt     Generate a trace and ASCII Gantt chart"
+	@echo "make pagesim   Build the offline page replacement simulator"
 
-.PHONY: all clean run demo headless test compare gantt help
+pagesim:
+	$(CC) -std=c11 -D_DEFAULT_SOURCE -Wall -Wextra -Wpedantic -o pagesim tools/pagesim.c
+
+.PHONY: all clean run demo headless test compare gantt help pagesim
 tsan: exam_os_tsan
 
 exam_os_tsan: $(SRC)

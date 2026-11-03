@@ -280,6 +280,17 @@ static void admit_arrivals(int *next_arrival_tick, int *next_boost_tick) {
     apply_mlfq_boost(next_boost_tick);
     if (tick < *next_arrival_tick) return;
     pthread_mutex_lock(&g_state.lock);
+    if (g_config.thrash_control &&
+        tick < g_state.admission_paused_until_tick) {
+        if (g_state.last_deferral_tick != tick) {
+            g_state.deferred_arrival_ticks++;
+            g_state.last_deferral_tick = tick;
+        }
+        pthread_mutex_unlock(&g_state.lock);
+        return;
+    }
+    pthread_mutex_unlock(&g_state.lock);
+    pthread_mutex_lock(&g_state.lock);
     int added = g_state.process_count;
     pthread_mutex_unlock(&g_state.lock);
     if (added < g_config.num_students) {
