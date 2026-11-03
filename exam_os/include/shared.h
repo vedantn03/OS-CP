@@ -140,6 +140,7 @@ typedef struct {
     int   simulation_running;
     int   current_tick;
     int   shutdown_requested;
+    pthread_cond_t tick_cv;
 
     // Recent log lines for dashboard
     char  recent_logs[3][256];

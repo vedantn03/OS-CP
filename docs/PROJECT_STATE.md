@@ -11,3 +11,5 @@ interactive workloads.
 - 2026-11-02: Completed memory race protection, configurable tick timing,
   interactive workload WAITING transitions, test restoration, and sanitizer
   validation for phases 1.5–2.2.
+- 2026-11-03: Added deterministic per-thread RNG streams and shared simulation
+  clock sleep/notification infrastructure.

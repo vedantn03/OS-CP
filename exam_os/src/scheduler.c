@@ -264,7 +264,7 @@ static int dispatch_one(const char *algorithm, int *busy) {
 
 void *scheduler_thread(void *arg) {
     (void)arg;
-    rng_seed_thread(1u ^ g_config.random_seed);
+    rng_init_thread(1);
     log_event("INFO", "SCHEDULER", "Scheduler thread started");
 
     int total_iterations = 0;

@@ -1,7 +1,7 @@
 #ifndef RNG_UTILS_H
 #define RNG_UTILS_H
 
-void rng_seed_thread(unsigned int salt);
+void rng_init_thread(unsigned stream);
 unsigned int rng_next(void);
 int rng_uniform(int upper_bound);
 

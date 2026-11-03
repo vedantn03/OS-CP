@@ -5,5 +5,6 @@
 
 long long clock_now_ms(void);
 long long clock_now_ns(void);
+void sim_sleep_ticks(int n);
 
 #endif

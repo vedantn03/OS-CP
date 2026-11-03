@@ -229,7 +229,7 @@ void *interrupt_thread(void *arg) {
         }
 
         tick_counter++;
-        usleep((useconds_t)g_config.tick_ms * 1000);
+        sim_sleep_ticks(1);
     }
 
     log_event("INFO", "INTERRUPT", "Interrupt thread exiting");

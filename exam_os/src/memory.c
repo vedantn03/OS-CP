@@ -281,7 +281,7 @@ int memory_audit(char *msg, size_t msglen) {
 // Simulates memory accesses for the currently running process
 void *memory_thread(void *arg) {
     (void)arg;
-    rng_seed_thread(2u ^ g_config.random_seed);
+    rng_init_thread(2);
     log_event("INFO", "MEMORY", "Memory thread started");
 
     while (1) {
@@ -301,7 +301,7 @@ void *memory_thread(void *arg) {
             }
         }
 
-        usleep((useconds_t)g_config.tick_ms * 1000);
+        sim_sleep_ticks(1);
     }
 
     log_event("INFO", "MEMORY", "Memory thread exiting");

@@ -179,7 +179,7 @@ static void trigger_submission_storm() {
 // ─── I/O flusher thread ───────────────────────────────────
 void *io_buffer_thread(void *arg) {
     (void)arg;
-    rng_seed_thread(3u ^ g_config.random_seed);
+    rng_init_thread(3);
     log_event("INFO", "IO", "I/O buffer thread started");
 
     int storm_triggered = 0;
@@ -234,7 +234,7 @@ void *io_buffer_thread(void *arg) {
             last_flush_tick = tick;
         }
 
-        usleep((useconds_t)g_config.tick_ms * 1000);
+        sim_sleep_ticks(1);
     }
 
     if (disk_file && disk_file != stderr) fclose(disk_file);

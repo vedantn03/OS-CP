@@ -13,6 +13,7 @@
 #include "io_buffer.h"
 #include "interrupt.h"
 #include "dashboard.h"
+#include "clock.h"
 #include "rng.h"
 #include "invariants.h"
 
@@ -28,14 +29,42 @@ static void handle_shutdown_signal(int signal_number) {
 }
 
 // ─── Init global state ────────────────────────────────────
-static void state_init() {
+static int state_init() {
     memset(&g_state, 0, sizeof(SystemState));
     g_state.running_pid        = -1;
     g_state.simulation_running =  1;
     g_state.current_tick       =  0;
     for (int i = 0; i < 3; i++)
         strncpy(g_state.recent_logs[i], "--- no events yet ---", 255);
-    pthread_mutex_init(&g_state.lock, NULL);
+    int result = pthread_mutex_init(&g_state.lock, NULL);
+    if (result != 0) {
+        fprintf(stderr, "ERROR: pthread_mutex_init failed: %s\n", strerror(result));
+        return 0;
+    }
+
+    pthread_condattr_t cond_attr;
+    result = pthread_condattr_init(&cond_attr);
+    if (result != 0) {
+        fprintf(stderr, "ERROR: pthread_condattr_init failed: %s\n", strerror(result));
+        pthread_mutex_destroy(&g_state.lock);
+        return 0;
+    }
+    result = pthread_condattr_setclock(&cond_attr, CLOCK_MONOTONIC);
+    if (result != 0) {
+        fprintf(stderr, "ERROR: pthread_condattr_setclock failed: %s\n", strerror(result));
+        pthread_condattr_destroy(&cond_attr);
+        pthread_mutex_destroy(&g_state.lock);
+        return 0;
+    }
+    result = pthread_cond_init(&g_state.tick_cv, &cond_attr);
+    if (result != 0)
+        fprintf(stderr, "ERROR: pthread_cond_init failed: %s\n", strerror(result));
+    pthread_condattr_destroy(&cond_attr);
+    if (result != 0) {
+        pthread_mutex_destroy(&g_state.lock);
+        return 0;
+    }
+    return 1;
 }
 
 // ─── Simulation tick thread ───────────────────────────────
@@ -47,9 +76,12 @@ static void *tick_thread(void *arg) {
         int running = g_state.simulation_running;
         if (running) g_state.current_tick++;
         pthread_mutex_unlock(&g_state.lock);
+        int result = pthread_cond_broadcast(&g_state.tick_cv);
+        if (result != 0)
+            fprintf(stderr, "ERROR: pthread_cond_broadcast failed: %s\n", strerror(result));
 
         if (!running) break;
-        usleep((useconds_t)g_config.tick_ms * 1000);
+        sim_sleep_ticks(1);
     }
     return NULL;
 }
@@ -75,6 +107,11 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "ERROR: Invalid configuration: %s\n", config_error);
         return EXIT_FAILURE;
     }
+    if (g_config.random_seed == 0) {
+        g_config.random_seed = (unsigned int)time(NULL);
+        printf("  Random seed: %u\n", g_config.random_seed);
+    }
+    rng_init_thread(0);
     signal(SIGINT, handle_shutdown_signal);
     signal(SIGTERM, handle_shutdown_signal);
     config_print(&g_config);
@@ -88,7 +125,7 @@ int main(int argc, char *argv[]) {
     }
 
     // ─── Init all subsystems ──────────────────────────────
-    state_init();
+    if (!state_init()) return EXIT_FAILURE;
     logger_init();
     scheduler_init();
     memory_init();
@@ -134,7 +171,7 @@ int main(int argc, char *argv[]) {
             break;
         }
 
-        usleep((useconds_t)g_config.tick_ms * 1000);
+        sim_sleep_ticks(1);
     }
 
     // ─── Shutdown sequence ────────────────────────────────
@@ -169,6 +206,7 @@ int main(int argc, char *argv[]) {
     printf("    output/summary.txt      — final statistics\n\n");
 
     // ─── Cleanup ──────────────────────────────────────────
+    pthread_cond_destroy(&g_state.tick_cv);
     pthread_mutex_destroy(&g_state.lock);
     pthread_mutex_destroy(&g_io_buffer.lock);
     sem_destroy(&g_io_buffer.empty_slots);
