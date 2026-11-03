@@ -27,4 +27,3 @@ tick_start,tick_end,pid,reason
 126,131,2,QUANTUM
 131,136,2,QUANTUM
 136,141,2,QUANTUM
-141,142,2,DONE
