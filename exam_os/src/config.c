@@ -6,6 +6,38 @@
 #include <ctype.h>
 #include "config.h"
 
+int config_parse_sched_algo(const char *value, SchedAlgo *algo) {
+    char normalized[32];
+    size_t length = strlen(value);
+    if (length >= sizeof(normalized)) return 0;
+    for (size_t i = 0; i <= length; i++)
+        normalized[i] = (char)toupper((unsigned char)value[i]);
+    if (strcmp(normalized, "RR") == 0 || strcmp(normalized, "ROUND_ROBIN") == 0)
+        *algo = ROUND_ROBIN;
+    else if (strcmp(normalized, "PRIORITY") == 0)
+        *algo = PRIORITY;
+    else if (strcmp(normalized, "FCFS") == 0)
+        *algo = FCFS;
+    else if (strcmp(normalized, "SJF") == 0)
+        *algo = SJF;
+    else if (strcmp(normalized, "SRTF") == 0)
+        *algo = SRTF;
+    else
+        return 0;
+    return 1;
+}
+
+const char *sched_algo_name(SchedAlgo algo) {
+    switch (algo) {
+    case ROUND_ROBIN: return "ROUND_ROBIN";
+    case PRIORITY: return "PRIORITY";
+    case FCFS: return "FCFS";
+    case SJF: return "SJF";
+    case SRTF: return "SRTF";
+    default: return "UNKNOWN";
+    }
+}
+
 void config_load_defaults(Config *cfg) {
     cfg->num_students    = 50;
     cfg->memory_frames   = 64;
@@ -31,6 +63,7 @@ void config_load_defaults(Config *cfg) {
     cfg->burst_max       = 6;
     cfg->think_min       = 4;
     cfg->think_max       = 12;
+    cfg->switch_cost     = 0;
 }
 
 int config_parse_file(Config *cfg, const char *filepath) {
@@ -61,6 +94,7 @@ int config_parse_file(Config *cfg, const char *filepath) {
         else if (strcmp(key, "BURST_MAX")        == 0 && numeric) cfg->burst_max = (int)number;
         else if (strcmp(key, "THINK_MIN")        == 0 && numeric) cfg->think_min = (int)number;
         else if (strcmp(key, "THINK_MAX")        == 0 && numeric) cfg->think_max = (int)number;
+        else if (strcmp(key, "SWITCH_COST")     == 0 && numeric) cfg->switch_cost     = (int)number;
         else if (strcmp(key, "WORKLOAD")         == 0) {
             for (char *p = val; *p; p++) *p = (char)toupper((unsigned char)*p);
             if (strcmp(val, "INTERACTIVE") == 0)
@@ -72,8 +106,13 @@ int config_parse_file(Config *cfg, const char *filepath) {
                 return 0;
             }
         }
-        else if (strcmp(key, "SCHEDULING_ALGO")  == 0)
-            cfg->sched_algo = (strcmp(val, "ROUND_ROBIN") == 0) ? ROUND_ROBIN : PRIORITY;
+        else if (strcmp(key, "SCHEDULING_ALGO")  == 0) {
+            if (!config_parse_sched_algo(val, &cfg->sched_algo)) {
+                fprintf(stderr, "ERROR: SCHEDULING_ALGO must be RR, ROUND_ROBIN, PRIORITY, FCFS, SJF, or SRTF\n");
+                fclose(f);
+                return 0;
+            }
+        }
         else if (strcmp(key, "PAGE_REPLACE")     == 0)
             cfg->page_algo  = (strcmp(val, "FIFO") == 0) ? FIFO : LRU;
     }
@@ -92,8 +131,14 @@ int config_parse_args(Config *cfg, int argc, char *argv[]) {
         else if (strcmp(argv[i], "--limit")   == 0 && i+1 < argc) cfg->session_limit   = atoi(argv[++i]);
         else if (strcmp(argv[i], "--arrival-batch") == 0 && i+1 < argc) cfg->arrival_batch = atoi(argv[++i]);
         else if (strcmp(argv[i], "--arrival-interval") == 0 && i+1 < argc) cfg->arrival_interval = atoi(argv[++i]);
-        else if (strcmp(argv[i], "--algo")     == 0 && i+1 < argc)
-            cfg->sched_algo = (strcmp(argv[++i], "RR") == 0) ? ROUND_ROBIN : PRIORITY;
+        else if (strcmp(argv[i], "--algo")     == 0 && i+1 < argc) {
+            if (!config_parse_sched_algo(argv[++i], &cfg->sched_algo)) {
+                fprintf(stderr, "ERROR: --algo must be RR, ROUND_ROBIN, PRIORITY, FCFS, SJF, or SRTF\n");
+                return 0;
+            }
+        }
+        else if (strcmp(argv[i], "--switch-cost") == 0 && i+1 < argc)
+            cfg->switch_cost = atoi(argv[++i]);
         else if (strcmp(argv[i], "--page")     == 0 && i+1 < argc)
             cfg->page_algo  = (strcmp(argv[++i], "FIFO") == 0) ? FIFO : LRU;
         else if (strcmp(argv[i], "--demo")     == 0) cfg->demo_mode = 1;
@@ -131,7 +176,8 @@ int config_parse_args(Config *cfg, int argc, char *argv[]) {
             printf("  --arrival-batch N    Processes added per arrival batch\n");
             printf("  --arrival-interval N Ticks between arrival batches\n");
             printf("  --buffer N     I/O buffer capacity\n");
-            printf("  --algo RR|PRIORITY  Scheduling algorithm\n");
+            printf("  --algo RR|ROUND_ROBIN|PRIORITY|FCFS|SJF|SRTF  Scheduling algorithm\n");
+            printf("  --switch-cost N  Context-switch overhead in ticks (0..50)\n");
             printf("  --page FIFO|LRU     Page replacement algorithm\n");
             printf("  --headless      Disable dashboard\n");
             printf("  --demo          Enable demo mode\n");
@@ -177,6 +223,8 @@ int config_validate(const Config *cfg, char *error, size_t error_size) {
         snprintf(error, error_size, "ARRIVAL_INTERVAL must be at least 1");
     else if (cfg->tick_ms < 1 || cfg->tick_ms > 60000)
         snprintf(error, error_size, "TICK_MS must be 1..60000");
+    else if (cfg->switch_cost < 0 || cfg->switch_cost > 50)
+        snprintf(error, error_size, "SWITCH_COST must be 0..50");
     else if (cfg->demand_min < 1)
         snprintf(error, error_size, "DEMAND_MIN must be at least 1");
     else if (cfg->demand_max < cfg->demand_min)
@@ -214,7 +262,8 @@ void config_print(Config *cfg) {
     printf("│ Think Min    : %-26d │\n", cfg->think_min);
     printf("│ Think Max    : %-26d │\n", cfg->think_max);
     printf("│ Buffer       : %-26d │\n", cfg->buffer_capacity);
-    printf("│ Scheduling   : %-26s │\n", cfg->sched_algo == PRIORITY ? "PRIORITY" : "ROUND_ROBIN");
+    printf("│ Scheduling   : %-26s │\n", sched_algo_name(cfg->sched_algo));
+    printf("│ Switch Cost  : %-26d │\n", cfg->switch_cost);
     printf("│ Page Replace : %-26s │\n", cfg->page_algo  == LRU      ? "LRU"      : "FIFO");
     printf("│ Demo Mode    : %-26s │\n", cfg->demo_mode  ? "ON" : "OFF");
     printf("│ Headless     : %-26s │\n", cfg->headless_mode ? "ON" : "OFF");

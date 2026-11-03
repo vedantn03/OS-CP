@@ -5,6 +5,7 @@
 #include <time.h>
 #include "dashboard.h"
 #include "clock.h"
+#include "config.h"
 
 #define REFRESH_MS 500
 
@@ -160,7 +161,7 @@ void *dashboard_thread(void *arg) {
                   "  EXAM OS SIMULATION  |  Tick: %-4d  |  Time: %s  |  "
                   "Press 'q' to quit  |  Mode: %s",
                   tick, elapsed,
-                  g_config.sched_algo == PRIORITY ? "PRIORITY" : "ROUND_ROBIN");
+                  sched_algo_name(g_config.sched_algo));
         wattroff(w_header, A_BOLD | COLOR_PAIR(7));
         box(w_header, 0, 0);
         wrefresh(w_header);

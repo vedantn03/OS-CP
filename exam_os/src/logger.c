@@ -5,6 +5,7 @@
 #include <pthread.h>
 #include "logger.h"
 #include "clock.h"
+#include "config.h"
 
 // ─── Internal log queue ──────────────────────────────────
 static LogEntry   log_queue[MAX_LOG_QUEUE];
@@ -140,10 +141,13 @@ void logger_write_report() {
     fprintf(f, "║ CPU                                      ║\n");
     fprintf(f, "║   Workload           : %-18s ║\n",
             g_config.workload == WORKLOAD_INTERACTIVE ? "INTERACTIVE" : "LEGACY");
+    fprintf(f, "║   Scheduler          : %-18s ║\n", sched_algo_name(g_config.sched_algo));
     fprintf(f, "║   Context Switches  : %-18d ║\n", g_state.context_switches);
     fprintf(f, "║   Dispatches        : %-18d ║\n", g_state.dispatches);
     fprintf(f, "║   Busy Ticks        : %-18d ║\n", g_state.busy_ticks);
     fprintf(f, "║   Idle Ticks        : %-18d ║\n", g_state.idle_ticks);
+    fprintf(f, "║   Overhead Ticks    : %-18d ║\n", g_state.overhead_ticks);
+    fprintf(f, "║   Preemptions       : %-18d ║\n", g_state.preemptions);
     fprintf(f, "║   CPU Utilization   : %-17.1f%% ║\n", g_state.cpu_utilization);
     fprintf(f, "║   Throughput (per 100 ticks): %-8.1f ║\n",
             g_state.current_tick > 0

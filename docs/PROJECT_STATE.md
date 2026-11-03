@@ -19,3 +19,6 @@ interactive workloads.
   submissions while preserving the legacy workload model.
 - 2026-11-03: Added interactive CPU burst/WAITING cycles, wakeups, and burst
   submissions with timeout-safe sleeper handling.
+- 2026-11-03: Added pluggable FCFS, SJF, and SRTF scheduling with a unified
+  ready queue, preemption accounting, and configurable context-switch cost;
+  PRIORITY retains shortest-remaining-time at dispatch boundaries (legacy name PRIORITY).

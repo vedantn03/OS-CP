@@ -154,6 +154,26 @@ if grep -o "PID [0-9]* terminated" output/system_log.txt | sort | uniq -d | grep
 fi
 pass T20
 
+for ALGO in FCFS SJF SRTF
+do
+    "$BIN" --headless --strict --tick-ms 10 --workload INTERACTIVE \
+        --students 12 --duration 300 --algo "$ALGO" --seed 21 >"$TMP/t21-$ALGO.out" 2>&1 ||
+        fail T21 "$ALGO interactive run failed"
+    if grep -q '^FAIL ' output/invariants.txt; then
+        fail T21 "$ALGO interactive invariant failure"
+    fi
+    completed=$(grep 'Completed Exams' output/summary.txt | sed 's/.*: *//; s/[^0-9].*//')
+    [ "$completed" -ge 8 ] || fail T21 "$ALGO completed fewer than 8 exams"
+done
+pass T21
+
+"$BIN" --headless --strict --tick-ms 10 --workload INTERACTIVE \
+    --students 12 --duration 300 --algo RR --switch-cost 2 --seed 21 >"$TMP/t22.out" 2>&1 ||
+    fail T22 "switch-cost run failed"
+overhead=$(grep 'Overhead Ticks' output/summary.txt | sed 's/.*: *//; s/[^0-9].*//')
+[ "$overhead" -gt 0 ] || fail T22 "switch cost produced no overhead ticks"
+pass T22
+
 make clean >/dev/null
 pass T8
-printf 'All T1-T20 tests passed.\n'
+printf 'All T1-T22 tests passed.\n'

@@ -22,7 +22,7 @@ typedef enum {
 } ProcessState;
 
 typedef enum {
-    ROUND_ROBIN, PRIORITY
+    ROUND_ROBIN, PRIORITY, FCFS, SJF, SRTF
 } SchedAlgo;
 
 typedef enum {
@@ -110,6 +110,7 @@ typedef struct {
     int       burst_max;
     int       think_min;
     int       think_max;
+    int       switch_cost;
 } Config;
 
 // ─── System State (shared across all modules) ────────────
@@ -121,6 +122,8 @@ typedef struct {
     int   dispatches;
     int   busy_ticks;
     int   idle_ticks;
+    int   overhead_ticks;
+    int   preemptions;
     int   completed_processes;
     int   finished_ok;
     int   flushed_records;

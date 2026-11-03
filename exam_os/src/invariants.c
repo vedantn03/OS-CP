@@ -29,6 +29,7 @@ int invariants_run(void) {
     int io_count;
     int busy_ticks;
     int idle_ticks;
+    int overhead_ticks;
     int final_tick;
     int block_events;
     int wakeups;
@@ -52,6 +53,7 @@ int invariants_run(void) {
     process_count = g_state.process_count;
     busy_ticks = g_state.busy_ticks;
     idle_ticks = g_state.idle_ticks;
+    overhead_ticks = g_state.overhead_ticks;
     final_tick = g_state.current_tick;
     block_events = g_state.block_events;
     wakeups = g_state.wakeups;
@@ -92,9 +94,9 @@ int invariants_run(void) {
     snprintf(msg, sizeof(msg), "buffer=%d capacity=%d", io_count, g_io_buffer.capacity);
     report_check("I6", io_count >= 0 && io_count <= g_config.buffer_capacity, msg);
 
-    snprintf(msg, sizeof(msg), "busy=%d idle=%d final=%d",
-             busy_ticks, idle_ticks, final_tick);
-    report_check("I7", busy_ticks + idle_ticks <= final_tick, msg);
+    snprintf(msg, sizeof(msg), "busy=%d idle=%d overhead=%d final=%d",
+             busy_ticks, idle_ticks, overhead_ticks, final_tick);
+    report_check("I7", busy_ticks + idle_ticks + overhead_ticks <= final_tick, msg);
 
     int cpu_sum = 0;
     for (int i = 0; i < process_count; i++)
