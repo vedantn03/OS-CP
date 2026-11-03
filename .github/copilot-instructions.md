@@ -14,6 +14,9 @@
 - Do not run sanitizers unless the prompt lists them.
 - Finish with a short report: files changed, commands run with results, deviations from the spec.
 - After the task, append one entry to docs/PROJECT_STATE.md (Changelog section).
+- tests/gate.sh is hand-written and read-only for you. Never edit it. Never report a prompt as done unless "bash tests/gate.sh <stage>" prints PASSED; paste its full output in your report.
+- Use the ACTUAL names in the code (e.g. src/clock.c, rng_uniform). If a prompt names something different, adapt and report it; do not create duplicate modules.
+- New tests take the next free T number. Never reuse or renumber an existing test.
 ## Phase 1.5-2.2 scope
 - Keep LEGACY workload behavior as the default; INTERACTIVE may add bounded
   I/O waits through the existing process state machine.
