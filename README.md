@@ -1,221 +1,105 @@
-# 🖥️ Exam OS Simulation
+# Exam OS: an operating-systems lab
 
-> A real-time operating system simulation built in C that models how an exam server manages resources under heavy load — featuring CPU scheduling, memory paging, I/O buffering, interrupt handling, and a live ncurses terminal dashboard.
+## What this is
 
----
+Exam OS is a C userspace simulation of an exam server. Student sessions compete for simulated CPU time, page frames, submission-buffer space, and disk service. It demonstrates operating-systems concepts through a threaded model and separate deterministic algorithm tools.
 
-## 📸 Live Dashboard
+It is not a kernel. It does not control real memory, processes, disks, or hardware interrupts. The live program runs as a POSIX process using threads, mutexes, semaphores, and an ncurses dashboard.
 
-![Exam OS Dashboard](assets/dashboard.png)
+The live simulator includes multiple CPU scheduling policies, process states, demand paging, FIFO/LRU/CLOCK replacement, a bounded I/O buffer, simulated disk scheduling, timeout and overload events, logging, and invariant checks. Separate tools cover offline page replacement, disk scheduling, and deadlock algorithms.
 
-> *Real-time terminal dashboard showing CPU utilization, memory paging, I/O buffer depth, interrupt events, and active process list — all updating live.*
+## Quick start
 
----
+On Ubuntu or WSL, install the build tools and ncurses development package:
 
-## 🎯 Motivation
-
-Online exam platforms routinely crash during peak usage — when hundreds of students log in simultaneously, submit answers at once, or hit their exam deadline at the same time. This project simulates exactly those failure conditions and demonstrates how OS-level resource management solves them.
-
-| Real-World Problem | OS Concept Applied |
-|---|---|
-| CPU starvation under heavy load | Priority Scheduling + Round Robin |
-| Memory overflow with many sessions | Demand Paging with LRU / FIFO |
-| Submission loss during I/O spikes | Circular Buffer + Producer-Consumer |
-| Exam timeouts not enforced reliably | Hardware Timer Interrupts (SIGALRM) |
-| No visibility into system behavior | Structured Logging + Live Dashboard |
-
----
-
-## ✨ Features
-
-### ⚙️ CPU Scheduler
-- Two switchable algorithms: **Priority Scheduling** and **Round Robin**
-- Min-heap ready queue — processes closest to deadline get CPU first
-- Tracks context switches, turnaround time, and CPU utilization live
-- Processes trickle in over time simulating students joining the exam
-
-### 🧠 Memory Paging
-- Per-process page tables with physical frame pool
-- Two page replacement algorithms: **LRU** (default) and **FIFO**
-- Dirty page tracking — modified pages written to I/O buffer before eviction
-- Page fault rate and hit ratio tracked and reported in final summary
-
-### 📥 I/O Submission Buffer
-- Circular buffer with **producer-consumer** model using POSIX semaphores
-- Non-blocking producers — full buffer drops and counts submissions rather than freezing
-- Flushes to disk when **80% full** or every 15 ticks (write-back policy)
-- **Demo mode** triggers a submission storm at tick 30 — watch the buffer spike
-
-### ⚡ Interrupt Handler
-- Full **Interrupt Vector Table** with 4 registered handlers
-- `INT_0 EXAM_TIMEOUT` — saves partial submission, frees memory, terminates process
-- `INT_1 OVERLOAD` — detects buffer at 95%, applies back-pressure
-- `INT_2 PAGE_FAULT` — centrally logs all page fault events
-- `INT_3 SUBMIT_COMPLETE` — acknowledges successful flush
-
-### 📊 Logger & Statistics
-- Thread-safe async log queue — callers never block waiting for disk
-- Writes `output/system_log.txt` in real time throughout simulation
-- Generates `output/summary.txt` with final performance report on exit
-- Live event feed in dashboard showing last 3 system events color-coded by severity
-
-### 🖥️ ncurses Live Dashboard
-- Refreshes every 500ms with 6 panels: CPU, Memory, I/O, Interrupts, Processes, Events
-- Progress bars turn **red** at critical thresholds (memory >85%, buffer >80%)
-- Currently running process highlighted in green in process list
-- Press `q` at any time to end simulation cleanly
-
-### 🔧 Fully Configurable
-- Edit `config.conf` to change simulation parameters without recompiling
-- CLI args override config file at runtime
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-```bash
-# Ubuntu / Debian / GitHub Codespaces
-sudo apt-get install libncurses5-dev libncursesw5-dev -y
+```console
+sudo apt update
+sudo apt install build-essential libncurses-dev
 ```
 
-### Build
-```bash
-git clone https://github.com/Priyanka-Singh27/exam-os-simulation.git
-cd exam-os-simulation/exam_os
-make
+Build from the repository root:
+
+```console
+cd exam_os && make
 ```
 
-### Run
-```bash
-# Normal run with config.conf settings
+Run the dashboard in a terminal at least 80 columns by 31 rows:
+
+```console
 ./exam_os
-
-# Headless run — no ncurses dashboard (useful for CI and servers)
-./exam_os --headless
-
-# Demo mode — triggers submission storm at tick 30
-./exam_os --demo
-
-# Custom parameters
-./exam_os --students 100 --algo PRIORITY --frames 64 --duration 120
-
-# Round Robin instead of Priority
-./exam_os --algo RR --demo
 ```
 
----
+Run headless with a 10 millisecond simulated tick:
 
-## ⚙️ Configuration
-
-Edit `config.conf` before running, or override with CLI flags:
-
-| Parameter | Config Key | CLI Flag | Default |
-|---|---|---|---|
-| Number of students | `NUM_STUDENTS` | `--students N` | 50 |
-| Memory frames | `MEMORY_FRAMES` | `--frames N` | 64 |
-| Time quantum (ticks) | `TIME_QUANTUM` | `--quantum N` | 5 |
-| Exam duration (ticks) | `EXAM_DURATION` | `--duration N` | 100 |
-| I/O buffer capacity | `BUFFER_CAPACITY` | `--buffer N` | 256 |
-| Scheduling algorithm | `SCHEDULING_ALGO` | `--algo PRIORITY\|RR` | PRIORITY |
-| Page replacement | `PAGE_REPLACE` | `--page LRU\|FIFO` | LRU |
-| Demo mode | — | `--demo` | off |
-| Headless mode | — | `--headless` | off |
-
----
-
-## 📁 Project Structure
-```
-exam_os/
-├── Makefile
-├── config.conf
-├── include/
-│   ├── shared.h        ← SystemState, PCB, all shared types
-│   ├── config.h
-│   ├── logger.h
-│   ├── scheduler.h
-│   ├── memory.h
-│   ├── io_buffer.h
-│   ├── interrupt.h
-│   └── dashboard.h
-├── src/
-│   ├── main.c          ← entry point, thread spawning, simulation loop
-│   ├── config.c        ← config file + CLI arg parser
-│   ├── logger.c        ← async log queue + report generator
-│   ├── scheduler.c     ← CPU scheduling (Priority + Round Robin)
-│   ├── memory.c        ← paging (LRU + FIFO page replacement)
-│   ├── io_buffer.c     ← circular buffer + submission flusher
-│   ├── interrupt.c     ← IVT + interrupt dispatcher
-│   └── dashboard.c     ← ncurses live dashboard
-└── output/
-    ├── system_log.txt  ← generated at runtime
-    ├── submissions.txt ← generated at runtime
-    └── summary.txt     ← generated at runtime
+```console
+./exam_os --headless --tick-ms 10 --students 12 --duration 100 --seed 1
 ```
 
----
+Run the regression suite:
 
-## 📈 Sample Results
-
-Run `./exam_os --algo PRIORITY --demo` vs `./exam_os --algo RR --demo` and compare:
-
-| Metric | Priority Scheduling | Round Robin |
-|---|---|---|
-| Avg Context Switches | Lower | Higher |
-| Timeouts Fired | Fewer (urgent first) | More |
-| Page Hit Rate | ~70–80% (LRU) | ~60–70% (FIFO) |
-| Dropped Submissions | 0 (normal load) | 0–3 (storm) |
-
-> These results demonstrate why Priority Scheduling outperforms Round Robin for deadline-driven workloads like online exams.
-
----
-
-## 🧵 Architecture
-
-All subsystems run as independent POSIX threads communicating through a shared `SystemState` struct protected by a mutex. No subsystem blocks another — the logger uses an async queue, the I/O buffer uses semaphores, and interrupts are dispatched asynchronously.
-```
-main.c
-  ├── tick_thread        — central simulation clock
-  ├── scheduler_thread   — CPU scheduling decisions
-  ├── memory_thread      — page access simulation
-  ├── io_buffer_thread   — submission flusher
-  ├── interrupt_thread   — IVT dispatcher + timeout monitor
-  ├── logger_thread      — async disk writer
-  └── dashboard_thread   — ncurses renderer (500ms refresh)
-        |
-        └── all read from → SystemState (mutex-protected)
+```console
+make test
 ```
 
----
+The program reads `config.conf` when that file is present, then applies command-line settings. Run it from `exam_os` so the configuration and relative output paths resolve as expected.
 
-## 🛠️ Tech Stack
+Standalone tool examples:
 
-- **Language:** C (core) + C++ STL compatible
-- **Concurrency:** POSIX pthreads
-- **IPC:** Shared memory + POSIX semaphores
-- **Signals:** POSIX signals (SIGALRM via software timer)
-- **UI:** ncurses terminal dashboard
-- **Build:** GNU Make
+```console
+make pagesim disksim deadsim
+./pagesim --algo FIFO --frames 3 --string "1 2 3 1 2 4"
+./disksim --algo SSTF --head 20 --cylinders 200 --string "10 90 30"
+./deadsim safe --file scenarios/banker_textbook.txt
+```
 
----
+## What you can demonstrate
 
-## 📄 Output Files
+| Program or script | Demonstration |
+|---|---|
+| `exam_os` | Live exam-session scheduling, paging, buffering, timeouts, disk service, and summary reporting. |
+| `pagesim` | Offline FIFO, LRU, CLOCK, and OPT reference-string simulation. |
+| `disksim` | Offline FIFO, LIFO, SSTF, SCAN, and C-SCAN movement and request ordering. |
+| `deadsim` | Standalone Banker safety and requests, detection, abort recovery, and wait-for graph cycles. |
+| `scripts/compare.sh` | Average live scheduler metrics across selected seeds. |
+| `scripts/pagecurve.sh` | Compare live page-fault rates across frame counts and policies. |
+| `scripts/diskcompare.sh` | Replay recorded disk requests under five policies. |
+| `scripts/gantt.sh` | Render a scheduler trace as a text chart. |
+| `scripts/deadlock_demo.sh` | Generate a Markdown walkthrough of deadlock lab scenarios. |
 
-After simulation ends, three files are generated in `output/`:
+## Documentation
 
-- **`system_log.txt`** — timestamped log of every event from all subsystems
-- **`submissions.txt`** — every exam submission with PID, question, answer, and partial flag
-- **`summary.txt`** — formatted final report with all performance metrics
+- [Architecture](docs/ARCHITECTURE.md)
+- [Syllabus map](docs/SYLLABUS_MAP.md)
+- [Experiments](docs/EXPERIMENTS.md)
+- [Demo plan](docs/DEMO.md)
+- [Viva questions and answers](docs/VIVA.md)
+- [Limitations](docs/LIMITATIONS.md)
+- [Current project state](docs/PROJECT_STATE.md)
+- [Saved results](docs/results/)
 
----
+## Testing
 
-## 👩‍💻 Author
+Run `make test` inside `exam_os` for the numbered regression checks. Acceptance gates are in `exam_os/tests`, one file per line:
 
-**Priyanka Singh**
+- `exam_os/tests/gate.sh`
+- `exam_os/tests/gate23.sh`
+- `exam_os/tests/gate24.sh`
+- `exam_os/tests/gate31.sh`
+- `exam_os/tests/gate32.sh`
+- `exam_os/tests/gate41a.sh`
+- `exam_os/tests/gate41b.sh`
+- `exam_os/tests/gate51.sh`
+- `exam_os/tests/gate61.sh`
+- `exam_os/tests/gate_all.sh`
 
----
+In this checkout `gate_all.sh` is empty and does not run the other gates. Run individual gates to check their specific requirements. Gates may rebuild executables or generate output files.
 
-## 📜 License
+The offline page and disk tools accept fixed reference strings or request queues, so they are useful for exact algorithm walkthroughs. Live comparisons use generated workloads and should be interpreted as measurements of the displayed settings rather than universal results.
 
-MIT License — free to use, modify, and reference for academic purposes.
-EOF
+The deadlock lab uses text scenario files under `exam_os/scenarios`. It is intentionally separate from the live simulator’s process scheduling and memory-management threads.
+
+## Origin and credit
+
+The original project is credited to Priyanka Singh, and its upstream README identifies the MIT License. This course extension adds scheduling policies and interactive sessions, a tick-driven paging and thrashing model, disk scheduling and request replay, offline paging and disk tools, the standalone deadlock lab, and regression and acceptance checks. This checkout does not include a separate license file.
+
+The extension is intended for learning and demonstration. The implementation represents mechanisms and metrics with model state and host threads; it does not reproduce kernel enforcement, hardware timing, persistent file-system behavior, or Android services.
