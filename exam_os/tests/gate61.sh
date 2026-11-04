@@ -100,9 +100,9 @@ need "Multilevel Feedback Queue" IMPLEMENTED
 need "Critical section and mutual exclusion (mutexes)" IMPLEMENTED
 need "Semaphores" IMPLEMENTED
 need "Producer-consumer (bounded buffer)" IMPLEMENTED
-need "Peterson's solution" "NOT IMPLEMENTED"
-need "Readers-writers and dining philosophers" "NOT IMPLEMENTED"
-need "Deadlock prevention" "NOT IMPLEMENTED"
+need "Peterson's solution" LAB
+need "Readers-writers and dining philosophers" LAB
+need "Deadlock prevention" PARTIAL
 need "Deadlock avoidance (Banker's algorithm)" LAB
 need "Deadlock detection and recovery" LAB
 need "Deadlock handling inside the live simulation" "NOT IMPLEMENTED"
