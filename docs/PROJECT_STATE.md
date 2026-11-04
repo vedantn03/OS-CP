@@ -10,7 +10,7 @@ interactive workloads.
 
 - 4.1a: disk_sched module and disksim
 - 4.1b: live disk, trace replay, diskcompare
-- 5.1: standalone deadsim Banker deadlock lab
+- 5.1: deadsim, scenarios and demo
 
 ## Disk integration model
 
@@ -35,16 +35,41 @@ lock.
 
 ## Deadlock lab
 
-`deadsim` is a standalone Banker safety lab; it is not connected to the live
-threaded admission path. The scenario format declares `resources N`, one
-`available` vector, and one line per exam session:
+`deadsim` is a standalone deadlock lab that models exam-server resources. It is
+not part of the live threaded simulation. Each process index is zero-based;
+limits are 1..32 processes and 1..16 resources. State files use whitespace
+separated tokens, `#` comments, and upper-case keywords. A file starts with
+`PROCESSES n`, `RESOURCES m`, and `AVAILABLE a1 ... am`, followed by optional
+`MAX`, `ALLOC`, and `REQUEST` matrix sections with exactly `n` rows and `m`
+non-negative integer values. An optional `NAMES` line is accepted and ignored.
+Duplicate matrix sections, malformed rows, missing required headers, and
+allocation values larger than the matching maximum in safety or request
+commands are invalid input.
+Scenario names label the three exam-server resources GRADER (grading worker
+slots), DBCONN (database connections), and QBANK (question-bank read licences).
 
-    session S0 allocation 0 1 0 maximum 7 5 3
+Build with `make deadsim`. Commands are `safe --file F`,
+`request --file F --pid P --req "r1 ... rm"`, `detect --file F`,
+`recover --file F [--policy min-alloc|max-alloc|lowest-index|highest-index]`,
+and `wfg --nodes N --edges "a>b ..."`. Recovery defaults to `min-alloc`.
+Outputs use the keys `state` and `sequence` for safety; `pid`, `request`,
+`result`, `reason`, and `sequence` for requests; `deadlock`, `finish_order`,
+and `deadlocked` for detection; `deadlock`, `aborted`, and `final` for
+recovery; and `deadlock` and `on_cycle` for wait-for graphs.
 
-The three resource classes used in the exam framing are grader slots, database
-connections, and question-bank licences. The tool reports a safe sequence or
-the sessions left deadlocked, and returns 0 for a safe state or 1 for an
-unsafe state. Build it with `make deadsim`; use `--string` or `--file`.
+Exit code 0 means a valid evaluation, including denied requests or unsafe and
+deadlocked states. Invalid files, missing required state sections, malformed
+requests, and out-of-range process or edge indices exit 1. Usage errors,
+unknown commands or policies, and unknown options exit 2. Safety and detection
+restart their scan at process 0 after each completion, making their sequences
+deterministic. Recovery chooses among currently deadlocked processes and
+re-runs detection after each abortion. Wait-for graph output lists every node
+that can reach itself through one or more edges.
+
+Run `bash scripts/deadlock_demo.sh` from `exam_os` to build and run the lab and
+write `../docs/results/deadlock.md`; use `--out DIR` to select another output
+directory. The demo includes textbook states, exam scenarios, all recovery
+policies, and cycle examples.
 
 ## Disk scheduling model
 

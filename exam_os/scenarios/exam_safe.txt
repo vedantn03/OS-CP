@@ -1,0 +1,16 @@
+# Each process is a student session. Resources are GRADER (grading worker slots),
+# DBCONN (database connections), and QBANK (question-bank read licences).
+PROCESSES 4
+RESOURCES 3
+AVAILABLE 2 1 1
+NAMES GRADER DBCONN QBANK
+MAX
+3 2 2
+2 1 1
+4 2 2
+2 2 1
+ALLOC
+1 0 0
+1 1 0
+1 0 1
+0 1 0

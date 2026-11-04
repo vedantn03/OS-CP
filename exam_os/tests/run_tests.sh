@@ -328,29 +328,31 @@ fi
 pass T39
 
 make deadsim >/dev/null || fail T40 "deadsim build failed"
-cat >"$TMP/dead-safe.txt" <<'EOF'
-resources 3
-available 3 3 2
-session S0 allocation 0 1 0 maximum 7 5 3
-session S1 allocation 2 0 0 maximum 3 2 2
-session S2 allocation 3 0 2 maximum 9 0 2
-session S3 allocation 2 1 1 maximum 2 2 2
-session S4 allocation 0 0 2 maximum 4 3 3
-EOF
-"$PWD/deadsim" --file "$TMP/dead-safe.txt" >"$TMP/dead-safe.out" ||
-    fail T40 "safe deadlock scenario failed"
-grep -q '^safe: yes$' "$TMP/dead-safe.out" ||
-    fail T40 "safe scenario was not reported safe"
-printf '%s\n' \
-    'resources 2' \
-    'available 0 0' \
-    'session S0 allocation 1 0 maximum 1 1' \
-    'session S1 allocation 0 1 maximum 1 1' >"$TMP/dead-unsafe.txt"
-if "$PWD/deadsim" --file "$TMP/dead-unsafe.txt" >"$TMP/dead-unsafe.out"; then
-    fail T40 "unsafe deadlock scenario was accepted"
+"$PWD/deadsim" safe --file scenarios/banker_textbook.txt >"$TMP/dead-safe.out" ||
+    fail T40 "safe textbook state failed"
+grep -q '^sequence: 1 3 0 2 4$' "$TMP/dead-safe.out" ||
+    fail T40 "textbook safe sequence mismatch"
+"$PWD/deadsim" request --file scenarios/banker_textbook.txt --pid 1 --req "1 0 2" >"$TMP/dead-request.out" ||
+    fail T40 "textbook resource request failed"
+grep -q '^result: granted$' "$TMP/dead-request.out" ||
+    fail T40 "textbook request was not granted"
+"$PWD/deadsim" detect --file scenarios/detect_textbook_deadlock.txt >"$TMP/dead-detect.out" ||
+    fail T40 "textbook detection failed"
+grep -q '^deadlocked: 1 2 3 4$' "$TMP/dead-detect.out" ||
+    fail T40 "textbook deadlocked set mismatch"
+"$PWD/deadsim" recover --file scenarios/detect_textbook_deadlock.txt --policy min-alloc >"$TMP/dead-recover.out" ||
+    fail T40 "textbook recovery failed"
+grep -q '^aborted: 1$' "$TMP/dead-recover.out" ||
+    fail T40 "min-alloc victim mismatch"
+"$PWD/deadsim" wfg --nodes 3 --edges "0>1 1>2 2>0" >"$TMP/dead-wfg.out" ||
+    fail T40 "wait-for graph failed"
+grep -q '^on_cycle: 0 1 2$' "$TMP/dead-wfg.out" ||
+    fail T40 "wait-for graph cycle mismatch"
+if "$PWD/deadsim" bogus >/dev/null 2>&1; then
+    fail T40 "unknown command was accepted"
+elif [ "$?" -ne 2 ]; then
+    fail T40 "unknown command exit code mismatch"
 fi
-grep -q '^deadlocked: S0 S1$' "$TMP/dead-unsafe.out" ||
-    fail T40 "deadlocked sessions were not reported"
 pass T40
 
 make clean >/dev/null
