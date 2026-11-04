@@ -54,8 +54,11 @@ make synclab
 ./synclab counter --mode mutex --threads 4 --iters 200000
 make memlab
 ./memlab contiguous --policy first --holes "100 500 200 300 600" --requests "212 417 112 426"
+./memlab buddy --total 1024 --min-block 32 --requests "100 240 64 256" --free "1 2 3 4"
+./memlab slab --page-size 4096 --classes "16 32 64" --ops "alloc:12,alloc:12,free:1,alloc:12"
 make fslab
 ./fslab --blocks 10 --method indexed --files "alpha:3,beta:4" --free alpha
+./fslab --blocks 10 --method contiguous --ops "alloc:alpha:4,alloc:beta:4,free:alpha,alloc:gamma:3"
 ```
 
 ## What you can demonstrate

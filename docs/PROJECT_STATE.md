@@ -52,7 +52,7 @@ Selected source modules, headers, standalone tools, scenarios, scripts, and test
 - `exam_os/scripts/diskcompare.sh` — live disk request capture and policy replay comparison.
 - `exam_os/scripts/gantt.sh` — ASCII chart generator for scheduler trace CSV.
 - `exam_os/scripts/pagecurve.sh` — multi-seed live page-fault/frame comparison.
-- `exam_os/tests/run_tests.sh` — numbered regression suite T1 through T60.
+- `exam_os/tests/run_tests.sh` — numbered regression suite T1 through T77.
 - `exam_os/tests/gate61.sh` — documentation gate and demonstration command runner.
 - `exam_os/tests/gate71.sh` — standalone synchronization lab and documentation gate.
 - `exam_os/tests/gate_all.sh` — currently an empty placeholder.
@@ -120,9 +120,17 @@ Command-line defaults below are the values loaded by `config_load_defaults` befo
 
 The parser rejects unknown or incomplete command-line arguments. Some integer values are converted with `atoi` before range checking, so malformed numeric text is not consistently rejected as a syntax error; use integer values in commands.
 
+## Standalone lab command forms
+
+- `memlab contiguous --policy first|best|worst --holes "KB ..." --requests "KB ..."` runs a placement policy.
+- `memlab buddy --total KB --min-block KB --requests "KB ..." [--free "ID ..."]` allocates power-of-two blocks and optionally frees successful request IDs to coalesce their buddies.
+- `memlab slab --page-size BYTES --classes "BYTES ..." --objects "BYTES ..."` allocates a fixed object list; alternatively `--ops "alloc:SIZE,free:ID,..."` processes operations in order and reuses freed slots.
+- `fslab --blocks N --method contiguous|linked|indexed --files name:size,... [--free name,...]` runs a batch; alternatively `--ops "alloc:name:size,free:name,..."` applies operations in order, updates the bitmap, and exposes contiguous external fragmentation.
+- Both tools accept `--help`. Buddy free IDs are 1-based positions in the request list (a failed request cannot be freed); slab IDs are the successful allocations printed as `object_N`; fslab operations use active file names.
+
 ## Tests
 
-The test runner names the checks T1 through T67; T8 is its final cleanup check and runs after T67. T43 and T44 repeat the same Peterson counter case. There are no unused T numbers between T1 and T67; T8's placement at the end is intentional.
+The test runner names the checks T1 through T77; T8 is its final cleanup check and runs after T77. T43 and T44 repeat the same Peterson counter case. There are no unused T numbers between T1 and T77; T8's placement at the end is intentional.
 
 - T1 builds the application.
 - T2 checks that the executable exists.
@@ -190,6 +198,16 @@ The test runner names the checks T1 through T67; T8 is its final cleanup check a
 - T65 checks fslab free-space counts and complete restoration for all methods.
 - T66 rejects duplicate fslab file names.
 - T67 rejects freeing a missing fslab file name.
+- T68 checks that freeing all buddy allocations coalesces to the original pool.
+- T69 rejects duplicate buddy frees.
+- T70 checks slab slot reuse and in-use/free slot counts.
+- T71 rejects a duplicate slab slot free.
+- T72 detects external fragmentation in a contiguous file allocation.
+- T73 allocates into a freed file extent.
+- T74 checks indexed file allocation after freeing and its index-block count.
+- T75 rejects a duplicate active filename in an operation sequence.
+- T76 rejects freeing a missing filename in an operation sequence.
+- T77 checks that both lab help pages document their sequential operations.
 
 ## Invariants
 
@@ -238,6 +256,7 @@ The gate scripts should be run from the `exam_os` directory. Some gates require 
 - 7.2: memlab.
 - 7.3: fslab.
 - 7.2/7.3: memlab and fslab.
+- 7.2/7.3: buddy coalescing, slab slot reuse, and sequential fslab operations.
 - 2026-11-02: Completed memory race protection, configurable tick timing, interactive workload WAITING transitions, test restoration, and sanitizer validation for phases 1.5–2.2.
 - 2026-11-03: Added deterministic per-thread RNG streams and shared simulation clock sleep/notification infrastructure.
 - 2026-11-03: Made scheduler CPU accounting tick-driven with utilization, invariants, and optional dispatch tracing.

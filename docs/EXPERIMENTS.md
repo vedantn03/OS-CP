@@ -144,15 +144,22 @@ The buddy allocator requires power-of-two total memory and minimum block size, s
 ./memlab buddy --total 1024 --min-block 32 --requests "100 240 64 256"
 ```
 
-With these inputs the blocks round to 128, 256, 64, and 256 KB. Output keys: `mode`, `total`, and `min_block` identify the setup; `requests`, `allocated`, and `failed` count outcomes; `allocated_bytes` is reserved block space; `requested_bytes` is useful payload; `internal_fragmentation` is their difference; `total_free` and `largest_free` describe remaining blocks. The current CLI has no free operation, so buddy coalescing cannot be demonstrated or verified through it.
+With these inputs the requests round to blocks of 128, 256, 64, and 256 KB. Each `allocation_N` line reports the request ID, block size, and pool offset. `allocated_bytes` is currently reserved block space; `requested_bytes` is useful payload; `internal_fragmentation` is their difference; `total_free` and `largest_free` summarize free buddy blocks. Free all four request IDs to demonstrate recursive coalescing:
+
+```console
+./memlab buddy --total 1024 --min-block 32 --requests "100 240 64 256" --free "1 2 3 4"
+```
+
+The final output should report `total_free: 1024`, `largest_free: 1024`, and `coalesced: yes`. `--free` accepts the 1-based request IDs from `allocation_N`; invalid and duplicate frees return an error.
 
 The slab allocator selects the smallest supplied size class that can hold each object and adds slabs as cache slots fill:
 
 ```console
 ./memlab slab --page-size 4096 --classes "16 32 64 128 256" --objects "12 24 40 100 200 12"
+./memlab slab --page-size 4096 --classes "16 32 64" --ops "alloc:12,alloc:12,free:1,alloc:12"
 ```
 
-Slab output keys: `mode`, `page_size`, and `classes` identify the cache setup; `objects`, `allocated`, and `failed` count inputs and outcomes; `slabs` counts pages assigned to caches; `requested_bytes` is useful payload; `allocated_bytes` is the size-class space occupied by objects; `internal_fragmentation` is class space minus payload; `slab_waste` is all page space committed to slabs but not occupied by object slots. The current CLI has no free operation or slot identifiers, so reuse and duplicate-live-slot behavior cannot be demonstrated or verified through it. These allocator models are standalone and do not allocate the live simulator's page frames.
+Slab output keys: `mode`, `page_size`, and `classes` identify the cache setup; `objects` counts allocation attempts, `allocated` counts successful allocations, `failed` counts unsatisfied allocation requests, and `freed` counts successful frees; `slabs` counts pages assigned to caches; `slots_in_use` and `free_slots` describe current capacity; `object_N` identifies its size class, slab, slot, and active/freed status; byte counters show payload, class space, internal fragmentation, and slab waste. In the operation example, object 3 reuses object 1's freed `class=16 slab=0 slot=0`, while object 2 stays active in `class=16 slab=0 slot=1`. The result reports two active objects and 254 free slots, demonstrating reuse without handing one slot to two live objects. These allocator models are standalone and do not allocate the live simulator's page frames.
 
 ## File system lab
 
@@ -169,9 +176,10 @@ make fslab
 ./fslab --blocks 10 --method linked --files "alpha:3,beta:4"
 ./fslab --blocks 10 --method indexed --files "alpha:3,beta:4"
 ./fslab --blocks 10 --method indexed --files "alpha:3,beta:4" --free alpha
+./fslab --blocks 20 --method contiguous --ops "alloc:a:5,alloc:b:5,alloc:c:5,alloc:d:5,free:b,free:d,alloc:e:8"
 ```
 
-Output keys: `mode` identifies this lab; `method` is the allocation layout; `blocks` is total disk blocks; `files_requested`, `files_allocated`, `files_failed`, and `files_freed` count outcomes; `directory` lists active names, sizes, and first or index blocks; `layout` shows contiguous block lists, linked chains, or indexed data-block lists; `free_blocks` counts available blocks; `bitmap` has one character per block (`1` allocated, `0` free). For the two-file examples above, contiguous and linked allocate seven of ten blocks and leave 3 free; indexed allocates the seven data blocks plus two index blocks and leaves 1 free. Freeing `alpha` in the indexed example releases its three data blocks and index block, leaving 5 free. A data file of size N reduces free space by N blocks for contiguous and linked methods, and N+1 for indexed allocation. Freeing the file restores those blocks. The current CLI cannot allocate more files after freeing one, so it cannot model a file request against extents fragmented by an earlier free. Duplicate names, missing names in `--free`, and capacity failures return nonzero status. This is an in-memory teaching model, not a persistent file system or part of the live simulator.
+Output keys: `mode` identifies this lab; `method` is the allocation layout; `blocks` is total disk blocks; `files_requested`, `files_allocated`, `files_failed`, and `files_freed` count outcomes; `directory` lists active names, sizes, and first or index blocks; `layout` shows contiguous block lists, linked chains, or indexed data-block lists; `free_blocks` counts available blocks; `largest_free_extent` is the largest contiguous run; `external_fragmentation` identifies a failed contiguous request despite sufficient total free space; `bitmap` has one character per block (`1` allocated, `0` free). For the two-file examples above, contiguous and linked allocate seven of ten blocks and leave 3 free; indexed allocates the seven data blocks plus two index blocks and leaves 1 free. Freeing `alpha` in the indexed example releases its three data blocks and index block, leaving 5 free. A data file of size N reduces free space by N blocks for contiguous and linked methods, and N+1 for indexed allocation. The `--ops` example creates four adjacent files, frees two nonadjacent extents, then requests 8 contiguous blocks. It fails with ten blocks free but a largest extent of five, proving external fragmentation. The same interface can proceed with a smaller request after freeing. Duplicate active names, missing names, and capacity or fragmentation failures return nonzero status. This is an in-memory teaching model, not a persistent file system or part of the live simulator.
 
 ## Reading the results
 

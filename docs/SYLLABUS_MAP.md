@@ -56,7 +56,7 @@ Legend: IMPLEMENTED (in the live simulator and tested), LAB (a standalone tool i
 | Swapping | NOT IMPLEMENTED | Arrival admission can pause during thrashing; that deferral is not swapping pages to backing storage. | make test T36, T37 |
 | Contiguous allocation (first, best, worst fit) and fragmentation | LAB | exam_os/tools/memlab.c::contiguous_command applies first, best, and worst fit to separate holes and reports external fragmentation. | `./memlab contiguous --policy first --holes "100 500 200 300 600" --requests "212 417 112 426"` |
 | Segmentation | NOT IMPLEMENTED | No segment tables or segment-address translation appear in the memory module. | No implementation |
-| Buddy and slab allocation | LAB | exam_os/tools/memlab.c::buddy_command splits power-of-two blocks; exam_os/tools/memlab.c::slab_command allocates objects from size-class slabs. | `./memlab buddy --total 1024 --min-block 32 --requests "100 200 60 500"`; `./memlab slab --page-size 4096 --classes "16 32 64 128 256" --objects "12 24 40 100 200 12"` |
+| Buddy and slab allocation | LAB | exam_os/tools/memlab.c::buddy_command splits and coalesces power-of-two blocks; exam_os/tools/memlab.c::slab_allocate_object reuses freed slots within size-class slabs. | `./memlab buddy --total 1024 --min-block 32 --requests "100 240 64 256" --free "1 2 3 4"`; `./memlab slab --page-size 4096 --classes "16 32 64" --ops "alloc:12,alloc:12,free:1,alloc:12"` |
 
 ## Unit 5: File and I/O Management
 
@@ -65,7 +65,7 @@ Legend: IMPLEMENTED (in the live simulator and tested), LAB (a standalone tool i
 | I/O buffering | IMPLEMENTED | exam_os/src/io_buffer.c::io_buffer_submit and exam_os/src/io_buffer.c::flush_buffer | make test T39 |
 | Disk scheduling (FIFO, LIFO, SSTF, SCAN, C-SCAN) | IMPLEMENTED | exam_os/src/disk_sched.c::disk_sched_run is used by live disk service. | docs/results/disk.md |
 | File concept, directories and allocation methods | LAB | exam_os/tools/fslab.c::print_directory lists simulated file entries and their allocation locations. | `./fslab --blocks 16 --method contiguous --files "alpha:3,beta:4,gamma:5"` |
-| File system implementation and free-space management | PARTIAL | A standalone free-space bitmap, directory, and contiguous, linked, and indexed allocation methods exist in exam_os/tools/fslab.c::run and exam_os/tools/fslab.c::allocate_scattered; inodes, journaling, mounting, and permissions do not exist. | `./fslab --blocks 10 --method indexed --files "alpha:3,beta:4" --free alpha` |
+| File system implementation and free-space management | PARTIAL | A standalone free-space bitmap, directory, and contiguous, linked, and indexed allocation methods exist in exam_os/tools/fslab.c::run and exam_os/tools/fslab.c::allocate_scattered; inodes, journaling, mounting, and permissions do not exist. | `./fslab --blocks 20 --method contiguous --ops "alloc:a:5,alloc:b:5,alloc:c:5,alloc:d:5,free:b,free:d,alloc:e:8"` |
 
 ## Unit 6: Operating System Kernel Internals and Android OS
 

@@ -463,7 +463,7 @@ printf '%s\n' "$worst" | grep -q '^allocated: 3$' && printf '%s\n' "$worst" | gr
 pass T63
 
 buddy=$(./memlab buddy --total 1024 --min-block 32 --requests "100 240 64 256")
-printf '%s\n' "$buddy" | grep -q '^allocated: 4$' && printf '%s\n' "$buddy" | grep -q '^allocated_bytes: 704$' && printf '%s\n' "$buddy" | grep -q '^internal_fragmentation: 44$' || fail T64 "buddy textbook rounding mismatch"
+printf '%s\n' "$buddy" | grep -q '^allocated: 4$' && printf '%s\n' "$buddy" | grep -q '^allocated_bytes: 704$' && printf '%s\n' "$buddy" | grep -q '^internal_fragmentation: 44$' && printf '%s\n' "$buddy" | grep -q '^allocation_1: request=100 block=128 ' && printf '%s\n' "$buddy" | grep -q '^allocation_2: request=240 block=256 ' && printf '%s\n' "$buddy" | grep -q '^allocation_3: request=64 block=64 ' && printf '%s\n' "$buddy" | grep -q '^allocation_4: request=256 block=256 ' || fail T64 "buddy textbook rounding mismatch"
 pass T64
 
 ./fslab --blocks 10 --method contiguous --files "alpha:3" >"$TMP/fslab-count-contiguous.out" || fail T65 "fslab contiguous bitmap count failed"
@@ -488,6 +488,47 @@ if ./fslab --blocks 10 --method indexed --files "alpha:3" --free missing >"$TMP/
 grep -q 'file to free was not found' "$TMP/fslab-missing.out" || fail T67 "fslab missing-name error was unclear"
 pass T67
 
+buddy_free=$(./memlab buddy --total 1024 --min-block 32 --requests "100 240 64 256" --free "1 2 3 4")
+printf '%s\n' "$buddy_free" | grep -q '^freed: 4$' && printf '%s\n' "$buddy_free" | grep -q '^total_free: 1024$' && printf '%s\n' "$buddy_free" | grep -q '^largest_free: 1024$' && printf '%s\n' "$buddy_free" | grep -q '^coalesced: yes$' || fail T68 "buddy free did not coalesce to the pool"
+pass T68
+
+if ./memlab buddy --total 1024 --min-block 32 --requests "100 240" --free "1 1" >"$TMP/memlab-buddy-double-free.out" 2>&1; then fail T69 "buddy accepted a duplicate free"; fi
+grep -q 'invalid or already freed' "$TMP/memlab-buddy-double-free.out" || fail T69 "buddy duplicate-free error was unclear"
+pass T69
+
+slab_ops=$(./memlab slab --page-size 4096 --classes "16 32 64" --ops "alloc:12,alloc:12,free:1,alloc:12")
+printf '%s\n' "$slab_ops" | grep -q '^object_1: class=16 slab=0 slot=0 status=freed$' && printf '%s\n' "$slab_ops" | grep -q '^object_2: class=16 slab=0 slot=1 status=active$' && printf '%s\n' "$slab_ops" | grep -q '^object_3: class=16 slab=0 slot=0 status=active$' && printf '%s\n' "$slab_ops" | grep -q '^slots_in_use: 2$' && printf '%s\n' "$slab_ops" | grep -q '^free_slots: 254$' || fail T70 "slab slot reuse or counters mismatch"
+pass T70
+
+if ./memlab slab --page-size 4096 --classes "16 32" --ops "alloc:12,free:1,free:1" >"$TMP/memlab-slab-double-free.out" 2>&1; then fail T71 "slab accepted a duplicate free"; fi
+grep -q 'invalid or already freed' "$TMP/memlab-slab-double-free.out" || fail T71 "slab duplicate-free error was unclear"
+pass T71
+
+if ./fslab --blocks 20 --method contiguous --ops "alloc:a:5,alloc:b:5,alloc:c:5,alloc:d:5,free:b,free:d,alloc:e:8" >"$TMP/fslab-fragmented.out" 2>&1; then fail T72 "fslab contiguous allocation ignored external fragmentation"; fi
+grep -q '^free_blocks: 10$' "$TMP/fslab-fragmented.out" && grep -q '^largest_free_extent: 5$' "$TMP/fslab-fragmented.out" && grep -q '^external_fragmentation: yes$' "$TMP/fslab-fragmented.out" || fail T72 "fslab fragmented extent accounting mismatch"
+pass T72
+
+./fslab --blocks 20 --method contiguous --ops "alloc:a:5,alloc:b:5,alloc:c:5,alloc:d:5,free:b,free:d,alloc:e:4" >"$TMP/fslab-after-free.out" || fail T73 "fslab could not allocate after freeing extents"
+grep -q '^files_allocated: 5$' "$TMP/fslab-after-free.out" && grep -q '^files_freed: 2$' "$TMP/fslab-after-free.out" && grep -q '^external_fragmentation: no$' "$TMP/fslab-after-free.out" && grep -q 'e(size=4,start=5)' "$TMP/fslab-after-free.out" || fail T73 "fslab post-free allocation result mismatch"
+pass T73
+
+./fslab --blocks 10 --method indexed --ops "alloc:alpha:3,alloc:beta:3,free:alpha,alloc:gamma:2" >"$TMP/fslab-indexed-after-free.out" || fail T74 "fslab indexed allocation after free failed"
+grep -q '^free_blocks: 3$' "$TMP/fslab-indexed-after-free.out" && grep -q 'beta(size=3,index=4)' "$TMP/fslab-indexed-after-free.out" && grep -q 'gamma(size=2,index=0)' "$TMP/fslab-indexed-after-free.out" || fail T74 "fslab indexed free-space accounting mismatch"
+pass T74
+
+if ./fslab --blocks 10 --method contiguous --ops "alloc:alpha:2,alloc:alpha:2" >"$TMP/fslab-duplicate-ops.out" 2>&1; then fail T75 "fslab operations accepted duplicate active names"; fi
+grep -q 'duplicate active file name' "$TMP/fslab-duplicate-ops.out" || fail T75 "fslab duplicate operation error was unclear"
+pass T75
+
+if ./fslab --blocks 10 --method contiguous --ops "alloc:alpha:2,free:missing" >"$TMP/fslab-missing-ops.out" 2>&1; then fail T76 "fslab operations freed a missing file"; fi
+grep -q 'file to free was not found' "$TMP/fslab-missing-ops.out" || fail T76 "fslab missing operation error was unclear"
+pass T76
+
+./memlab --help >"$TMP/memlab-help.out" || fail T77 "memlab help failed"
+./fslab --help >"$TMP/fslab-help.out" || fail T77 "fslab help failed"
+grep -q -- '--free ' "$TMP/memlab-help.out" && grep -q 'alloc:SIZE,free:ID' "$TMP/memlab-help.out" && grep -q 'alloc:name:blocks,free:name' "$TMP/fslab-help.out" || fail T77 "standalone lab help omitted sequential operations"
+pass T77
+
 make clean >/dev/null
 pass T8
-printf 'All T1-T67 tests passed.\n'
+printf 'All T1-T77 tests passed.\n'
