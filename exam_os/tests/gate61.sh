@@ -115,13 +115,13 @@ need "Optimal page replacement" LAB
 need "Belady's anomaly" LAB
 need "Thrashing detection and control" IMPLEMENTED
 need "Swapping" "NOT IMPLEMENTED"
-need "Contiguous allocation (first, best, worst fit) and fragmentation" "NOT IMPLEMENTED"
+need "Contiguous allocation (first, best, worst fit) and fragmentation" LAB
 need "Segmentation" "NOT IMPLEMENTED"
-need "Buddy and slab allocation" "NOT IMPLEMENTED"
+need "Buddy and slab allocation" LAB
 need "I/O buffering" IMPLEMENTED
 need "Disk scheduling (FIFO, LIFO, SSTF, SCAN, C-SCAN)" IMPLEMENTED
-need "File concept, directories and allocation methods" "NOT IMPLEMENTED"
-need "File system implementation and free-space management" "NOT IMPLEMENTED"
+need "File concept, directories and allocation methods" LAB
+need "File system implementation and free-space management" PARTIAL
 need "Linux kernel architecture and boot process" EXCLUDED
 need "System call interface" "NOT IMPLEMENTED"
 need "Interrupt vector table and handlers" IMPLEMENTED
