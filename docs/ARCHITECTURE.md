@@ -8,6 +8,10 @@ Exam OS is one C process containing concurrent subsystem threads. The shared `Sy
 
 The standalone `exam_os/tools/synclab.c` program demonstrates counter races and mutual exclusion, readers-writers policies, and dining-philosopher deadlock strategies. It has its own `main` and does not participate in the live simulator's thread or lock graph.
 
+The standalone `exam_os/tools/memlab.c` program models contiguous-fit, buddy, and slab allocation with its own command-line interface. Its allocator state is separate from the live simulator's page frames and memory manager.
+
+The standalone `exam_os/tools/fslab.c` program keeps a directory of simulated files and a block-level free-space bitmap. Its contiguous, linked, and indexed allocations are demonstration state only; they do not change the live disk queue or persist file data.
+
 ```mermaid
 flowchart LR
     Main[main thread] --> State[(SystemState)]

@@ -54,9 +54,9 @@ Legend: IMPLEMENTED (in the live simulator and tested), LAB (a standalone tool i
 | Belady's anomaly | LAB | exam_os/tools/pagesim.c::run_simulation compares offline FIFO frame counts. | docs/results/belady.md |
 | Thrashing detection and control | IMPLEMENTED | exam_os/src/memory.c::thrash_update and exam_os/src/scheduler.c::admit_arrivals | make test T36, T37 |
 | Swapping | NOT IMPLEMENTED | Arrival admission can pause during thrashing; that deferral is not swapping pages to backing storage. | make test T36, T37 |
-| Contiguous allocation (first, best, worst fit) and fragmentation | NOT IMPLEMENTED | The live memory model uses page frames and has no contiguous-fit allocator. | No implementation |
+| Contiguous allocation (first, best, worst fit) and fragmentation | LAB | exam_os/tools/memlab.c::contiguous_command applies first, best, and worst fit to separate holes and reports external fragmentation. | `./memlab contiguous --policy first --holes "100 500 200 300 600" --requests "212 417 112 426"` |
 | Segmentation | NOT IMPLEMENTED | No segment tables or segment-address translation appear in the memory module. | No implementation |
-| Buddy and slab allocation | NOT IMPLEMENTED | The project does not implement kernel heap or buddy allocators. | No implementation |
+| Buddy and slab allocation | LAB | exam_os/tools/memlab.c::buddy_command splits power-of-two blocks; exam_os/tools/memlab.c::slab_command allocates objects from size-class slabs. | `./memlab buddy --total 1024 --min-block 32 --requests "100 200 60 500"`; `./memlab slab --page-size 4096 --classes "16 32 64 128 256" --objects "12 24 40 100 200 12"` |
 
 ## Unit 5: File and I/O Management
 
@@ -64,8 +64,8 @@ Legend: IMPLEMENTED (in the live simulator and tested), LAB (a standalone tool i
 |---|---|---|---|
 | I/O buffering | IMPLEMENTED | exam_os/src/io_buffer.c::io_buffer_submit and exam_os/src/io_buffer.c::flush_buffer | make test T39 |
 | Disk scheduling (FIFO, LIFO, SSTF, SCAN, C-SCAN) | IMPLEMENTED | exam_os/src/disk_sched.c::disk_sched_run is used by live disk service. | docs/results/disk.md |
-| File concept, directories and allocation methods | NOT IMPLEMENTED | Output files are ordinary host files; no simulated file namespace or allocation policy exists. | No implementation |
-| File system implementation and free-space management | NOT IMPLEMENTED | There is no simulated filesystem or free-space manager in this project. | No implementation |
+| File concept, directories and allocation methods | LAB | exam_os/tools/fslab.c::print_directory lists simulated file entries and their allocation locations. | `./fslab --blocks 16 --method contiguous --files "alpha:3,beta:4,gamma:5"` |
+| File system implementation and free-space management | LAB | exam_os/tools/fslab.c::run maintains the free-space bitmap; exam_os/tools/fslab.c::allocate_contiguous and exam_os/tools/fslab.c::allocate_scattered implement allocation strategies. | `./fslab --blocks 10 --method indexed --files "alpha:3,beta:4" --free alpha` |
 
 ## Unit 6: Operating System Kernel Internals and Android OS
 

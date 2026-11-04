@@ -13,6 +13,8 @@ fail() { printf 'FAIL %s: %s\n' "$1" "$2" >&2; exit 1; }
 
 make clean >/dev/null
 make synclab >/dev/null || fail T41 "synclab build failed"
+make memlab >/dev/null || { echo "FAIL memlab build failed" >&2; exit 1; }
+make fslab >/dev/null || { echo "FAIL fslab build failed" >&2; exit 1; }
 make >/dev/null || fail T1 "build failed"
 pass T1
 
@@ -391,6 +393,60 @@ elif [ "$?" -ne 2 ]; then
 fi
 pass T48
 
+./memlab contiguous --policy first --holes "100 500 200 300 600" --requests "212 417 112 426" >"$TMP/memlab-first.out" || fail T49 "memlab first-fit failed"
+grep -q '^allocated: 3$' "$TMP/memlab-first.out" && grep -q '^failed: 1$' "$TMP/memlab-first.out" && grep -q '^external_fragmentation: yes$' "$TMP/memlab-first.out" || fail T49 "memlab first-fit fragmentation mismatch"
+pass T49
+
+./memlab contiguous --policy best --holes "100 500 200 300 600" --requests "212 417 112 426" >"$TMP/memlab-best.out" || fail T50 "memlab best-fit failed"
+grep -q '^allocated: 4$' "$TMP/memlab-best.out" && grep -q '^failed: 0$' "$TMP/memlab-best.out" || fail T50 "memlab best-fit result mismatch"
+pass T50
+
+./memlab contiguous --policy worst --holes "100 500 200 300 600" --requests "212 417 112 426" >"$TMP/memlab-worst.out" || fail T51 "memlab worst-fit failed"
+grep -q '^external_fragmentation: yes$' "$TMP/memlab-worst.out" || fail T51 "memlab worst-fit fragmentation mismatch"
+pass T51
+
+./memlab buddy --total 1024 --min-block 32 --requests "100 200 60 500" >"$TMP/memlab-buddy.out" || fail T52 "memlab buddy allocator failed"
+grep -q '^allocated: 4$' "$TMP/memlab-buddy.out" && grep -q '^internal_fragmentation: 100$' "$TMP/memlab-buddy.out" || fail T52 "memlab buddy rounding mismatch"
+pass T52
+
+./memlab slab --page-size 4096 --classes "16 32 64 128 256" --objects "12 24 40 100 200 12" >"$TMP/memlab-slab.out" || fail T53 "memlab slab allocator failed"
+grep -q '^allocated: 6$' "$TMP/memlab-slab.out" && grep -q '^internal_fragmentation: 124$' "$TMP/memlab-slab.out" && grep -q '^slabs: 5$' "$TMP/memlab-slab.out" || fail T53 "memlab slab result mismatch"
+pass T53
+
+if ./memlab buddy --total 1000 --min-block 32 --requests "12" >/dev/null 2>&1; then
+    fail T54 "memlab accepted a non-power-of-two heap"
+elif [ "$?" -ne 2 ]; then
+    fail T54 "memlab invalid heap exit code mismatch"
+fi
+pass T54
+
+./fslab --blocks 16 --method contiguous --files "alpha:3,beta:4,gamma:5" >"$TMP/fslab-contiguous.out" || fail T55 "fslab contiguous allocation failed"
+grep -q '^directory: alpha(size=3,start=0); beta(size=4,start=3); gamma(size=5,start=7)$' "$TMP/fslab-contiguous.out" && grep -q '^bitmap: 1111111111110000$' "$TMP/fslab-contiguous.out" || fail T55 "fslab contiguous directory or bitmap mismatch"
+pass T55
+
+./fslab --blocks 10 --method linked --files "alpha:3,beta:4" >"$TMP/fslab-linked.out" || fail T56 "fslab linked allocation failed"
+grep -q '^layout: alpha=0->1->2; beta=3->4->5->6$' "$TMP/fslab-linked.out" && grep -q '^free_blocks: 3$' "$TMP/fslab-linked.out" || fail T56 "fslab linked layout mismatch"
+pass T56
+
+./fslab --blocks 10 --method indexed --files "alpha:3,beta:4" >"$TMP/fslab-indexed.out" || fail T57 "fslab indexed allocation failed"
+grep -q '^layout: alpha=index:0\[1,2,3\]; beta=index:4\[5,6,7,8\]$' "$TMP/fslab-indexed.out" && grep -q '^free_blocks: 1$' "$TMP/fslab-indexed.out" || fail T57 "fslab index layout mismatch"
+pass T57
+
+./fslab --blocks 10 --method indexed --files "alpha:3,beta:4" --free alpha >"$TMP/fslab-free.out" || fail T58 "fslab file release failed"
+grep -q '^directory: beta(size=4,index=4)$' "$TMP/fslab-free.out" && grep -q '^bitmap: 0000111110$' "$TMP/fslab-free.out" || fail T58 "fslab free-space update mismatch"
+pass T58
+
+./fslab --blocks 5 --method contiguous --files "alpha:3,beta:3" >"$TMP/fslab-full.out" || fail T59 "fslab capacity case failed"
+grep -q '^files_allocated: 1$' "$TMP/fslab-full.out" && grep -q '^files_failed: 1$' "$TMP/fslab-full.out" || fail T59 "fslab full-volume result mismatch"
+pass T59
+
+if ./fslab --blocks 8 --method bogus --files "alpha:2" >/dev/null 2>&1; then
+    fail T60 "fslab accepted an unknown allocation method"
+elif [ "$?" -ne 2 ]; then
+    fail T60 "fslab invalid method exit code mismatch"
+fi
+pass T60
+
 make clean >/dev/null
 pass T8
-printf 'All T1-T48 tests passed.\n'
+printf 'All T1-T60 tests passed.\n'

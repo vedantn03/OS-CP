@@ -118,6 +118,59 @@ Philosopher output keys: `mode` is the strategy; `philosophers` is N; `meals` is
 
 The unsynchronized counter and the `none` readers-writers control may show lost updates, torn reads, or violations only probabilistically on a multicore machine. A run that happens not to expose a race does not make the unsafe control synchronized. The lab is standalone and does not change the live simulator's locking.
 
+## Memory allocation lab
+
+Build the standalone allocator examples from `exam_os`:
+
+```console
+make memlab
+```
+
+Contiguous allocation treats the supplied sizes as separate free holes and consumes a selected hole from its beginning. A request may fail from external fragmentation when total free space is sufficient but no individual hole is large enough. Run all three placement policies on the same requests:
+
+```console
+./memlab contiguous --policy first --holes "100 500 200 300 600" --requests "212 417 112 426"
+./memlab contiguous --policy best --holes "100 500 200 300 600" --requests "212 417 112 426"
+./memlab contiguous --policy worst --holes "100 500 200 300 600" --requests "212 417 112 426"
+```
+
+Contiguous output keys: `mode` names the allocator; `policy` is first, best, or worst fit; `requests` is the number of requests; `allocated` and `failed` count outcomes; `total_free` and `largest_free` report remaining space; `external_fragmentation` is yes when a failed request could fit in total free space but not in any single hole; `fragmented_free` is total free space excluding the largest hole.
+
+The buddy allocator requires power-of-two total memory and minimum block size, splits larger blocks to satisfy each request, and rounds allocations up to the next suitable block:
+
+```console
+./memlab buddy --total 1024 --min-block 32 --requests "100 200 60 500"
+```
+
+Buddy output keys: `mode`, `total`, and `min_block` identify the setup; `requests`, `allocated`, and `failed` count request outcomes; `allocated_bytes` is reserved block space; `requested_bytes` is useful payload; `internal_fragmentation` is their difference; `total_free` and `largest_free` describe remaining blocks.
+
+The slab allocator selects the smallest supplied size class that can hold each object and adds slabs as cache slots fill:
+
+```console
+./memlab slab --page-size 4096 --classes "16 32 64 128 256" --objects "12 24 40 100 200 12"
+```
+
+Slab output keys: `mode`, `page_size`, and `classes` identify the cache setup; `objects`, `allocated`, and `failed` count inputs and outcomes; `slabs` counts pages assigned to caches; `requested_bytes` is useful payload; `allocated_bytes` is the size-class space occupied by objects; `internal_fragmentation` is class space minus payload; `slab_waste` is all page space committed to slabs but not occupied by object slots. These allocator models are standalone and do not allocate the live simulator's page frames.
+
+## File allocation lab
+
+Build the standalone directory and block-allocation model:
+
+```console
+make fslab
+```
+
+`fslab` creates a directory of named files, marks their blocks in a free-space bitmap, and supports contiguous, linked, and indexed layouts. Indexed allocation reserves one extra block per file for its index. The optional `--free` list releases allocated file blocks and removes those entries from the directory:
+
+```console
+./fslab --blocks 16 --method contiguous --files "alpha:3,beta:4,gamma:5"
+./fslab --blocks 10 --method linked --files "alpha:3,beta:4"
+./fslab --blocks 10 --method indexed --files "alpha:3,beta:4"
+./fslab --blocks 10 --method indexed --files "alpha:3,beta:4" --free alpha
+```
+
+Output keys: `mode` identifies this lab; `method` is the allocation layout; `blocks` is total disk blocks; `files_requested`, `files_allocated`, `files_failed`, and `files_freed` count outcomes; `directory` lists active names, sizes, and first or index blocks; `layout` shows contiguous block lists, linked chains, or indexed data-block lists; `free_blocks` counts available blocks; `bitmap` has one character per block (`1` allocated, `0` free). This is an in-memory teaching model, not a persistent file system or part of the live simulator.
+
 ## Reading the results
 
 Live result files describe a particular configuration and seed set; they are not guaranteed values for another machine or run. Read each report’s workload, policy, and seed description before comparing its rows. The live experiments produce CSV and Markdown output beneath the selected directory.

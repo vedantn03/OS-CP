@@ -5,6 +5,15 @@ exam_os/disksim
 exam_os/deadsim
 exam_os/synclab
 exam_os/synclab_tsan
+exam_os/memlab
+exam_os/fslab
+exam_os/exam_os.exe
+exam_os/synclab.exe
+exam_os/memlab.exe
+exam_os/fslab.exe
+exam_os/pagesim.exe
+exam_os/disksim.exe
+exam_os/deadsim.exe
 exam_os/*.o
 exam_os/src/*.o
 

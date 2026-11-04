@@ -37,7 +37,7 @@ $ bash scripts/gantt.sh output/trace.csv --width 80
 $ cat /tmp/demo-trace-before.csv > output/trace.csv
 ```
 
-### 3:00–5:00 — Paging textbook string and Belady example
+### 3:00–5:00 — Paging and memory-allocation labs
 
 Say: “The standalone page simulator replays the same fixed reference string. FIFO, LRU, and OPT can therefore be compared exactly. OPT is offline because it uses future references.”
 
@@ -54,6 +54,8 @@ $ bash scripts/pagecurve.sh --seeds "1 2" --algos "FIFO LRU" --frames "8 16" --o
 ```
 
 Expected textbook counts are FIFO 15 faults, LRU 12 faults, and OPT 9 faults for the first string with three frames. For the second string FIFO produces 9 faults with 3 frames and 10 faults with 4 frames, demonstrating Belady’s anomaly.
+
+The standalone `memlab` examples are separate from the live page-frame model. They demonstrate contiguous-fit choice and external fragmentation, plus buddy and slab allocation overhead; runnable commands are in [the experiments guide](EXPERIMENTS.md#memory-allocation-lab).
 
 ### 5:00–6:30 — Disk scheduling
 
@@ -96,6 +98,8 @@ The standalone synchronization lab is separate from the live simulator. Build it
 
 Say: “The offline tools provide fixed-input algorithm evidence, while live results depend on thread timing. The results folder has saved reports, and the limitations page separates simulated mechanisms from operating-system features that are out of scope.”
 
+The standalone `fslab` demonstrates directory entries, free-space tracking, and three file-block allocation layouts; its runnable examples are in [the experiments guide](EXPERIMENTS.md#file-allocation-lab).
+
 Show the generated report from the quick comparison and the repository’s deadlock example:
 
 ```console
@@ -114,4 +118,4 @@ $! ./exam_os --demo
 
 If a live run fails, use the checked-in [scheduler comparison](results/compare.md), [page curves](results/pagecurve.md), [Belady example](results/belady.md), [disk comparison](results/disk.md), and [deadlock walkthrough](results/deadlock.md). Explain which inputs are fixed and which reports aggregate variable threaded runs.
 
-If asked about a feature that is absent, say so plainly and point to [the syllabus map](SYLLABUS_MAP.md) or [limitations](LIMITATIONS.md). Examples include fork/exec, a file system, system calls, swapping, Android internals, and deadlock handling in the live simulator.
+If asked about a feature that is absent, say so plainly and point to [the syllabus map](SYLLABUS_MAP.md) or [limitations](LIMITATIONS.md). Examples include fork/exec, a persistent file system in the live simulator, system calls, swapping, Android internals, and deadlock handling in the live simulator.

@@ -6,7 +6,7 @@ Exam OS is a C userspace simulation of an exam server. Student sessions compete 
 
 It is not a kernel. It does not control real memory, processes, disks, or hardware interrupts. The live program runs as a POSIX process using threads, mutexes, semaphores, and an ncurses dashboard.
 
-The live simulator includes multiple CPU scheduling policies, process states, demand paging, FIFO/LRU/CLOCK replacement, a bounded I/O buffer, simulated disk scheduling, timeout and overload events, logging, and invariant checks. Separate tools cover offline page replacement, disk scheduling, deadlock algorithms, and synchronization exercises.
+The live simulator includes multiple CPU scheduling policies, process states, demand paging, FIFO/LRU/CLOCK replacement, a bounded I/O buffer, simulated disk scheduling, timeout and overload events, logging, and invariant checks. Separate tools cover offline page replacement, disk scheduling, deadlock algorithms, synchronization, memory allocation, and file allocation.
 
 ## Quick start
 
@@ -52,6 +52,10 @@ make pagesim disksim deadsim
 ./deadsim safe --file scenarios/banker_textbook.txt
 make synclab
 ./synclab counter --mode mutex --threads 4 --iters 200000
+make memlab
+./memlab contiguous --policy first --holes "100 500 200 300 600" --requests "212 417 112 426"
+make fslab
+./fslab --blocks 10 --method indexed --files "alpha:3,beta:4" --free alpha
 ```
 
 ## What you can demonstrate
@@ -63,6 +67,8 @@ make synclab
 | `disksim` | Offline FIFO, LIFO, SSTF, SCAN, and C-SCAN movement and request ordering. |
 | `deadsim` | Standalone Banker safety and requests, detection, abort recovery, and wait-for graph cycles. |
 | `synclab` | Standalone counter synchronization, readers-writers policies, and dining philosophers. |
+| `memlab` | Standalone contiguous-fit, buddy, and slab allocation with fragmentation metrics. |
+| `fslab` | Standalone directory, free-space bitmap, and contiguous, linked, and indexed file allocation. |
 | `scripts/compare.sh` | Average live scheduler metrics across selected seeds. |
 | `scripts/pagecurve.sh` | Compare live page-fault rates across frame counts and policies. |
 | `scripts/diskcompare.sh` | Replay recorded disk requests under five policies. |
@@ -79,6 +85,16 @@ make synclab
 - [Limitations](docs/LIMITATIONS.md)
 - [Current project state](docs/PROJECT_STATE.md)
 - [Saved results](docs/results/)
+
+## Kernel Studio dashboard
+
+The local browser dashboard connects to the actual simulator and standalone labs through a small local API server. On Windows with Node.js installed, run from the `exam_os` directory:
+
+```console
+node dashboard/server.js
+```
+
+Open [http://127.0.0.1:8766](http://127.0.0.1:8766) in a browser. The server binds only to localhost, validates every experiment request, and invokes fixed project executables without passing input through a shell. GCC is needed to build the standalone labs. Building the full simulator also requires GNU Make and ncurses. In WSL, `python3 dashboard/server.py` provides the same interface.
 
 ## Testing
 

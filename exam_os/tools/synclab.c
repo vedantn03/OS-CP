@@ -291,6 +291,7 @@ typedef struct {
     pthread_mutex_t *forks;
     _Atomic int *owners;
     pthread_barrier_t left_barrier;
+    pthread_barrier_t attempt_barrier;
     sem_t waiter;
     _Atomic long stuck, meals_eaten, violations;
     _Atomic int runtime_error;
@@ -348,19 +349,26 @@ static void *phil_worker(void *opaque) {
     if (s->mode == 2) return waiter_philosopher_worker(opaque);
     {
         struct timespec deadline;
+        int right_acquired = 0;
         if (pthread_mutex_lock(&s->forks[left]) != 0) { atomic_store(&s->runtime_error, 1); return NULL; }
         fork_acquired(s, left);
         br = pthread_barrier_wait(&s->left_barrier);
         if (br != 0 && br != PTHREAD_BARRIER_SERIAL_THREAD) atomic_store(&s->runtime_error, 1);
-        if (clock_gettime(CLOCK_REALTIME, &deadline) != 0) { atomic_store(&s->runtime_error, 1); }
-        deadline.tv_sec += s->timeout_ms / 1000;
-        deadline.tv_nsec += (s->timeout_ms % 1000) * 1000000;
-        if (deadline.tv_nsec >= 1000000000L) { deadline.tv_sec++; deadline.tv_nsec -= 1000000000L; }
-        { int result = pthread_mutex_timedlock(&s->forks[right], &deadline);
-          if (result == ETIMEDOUT) atomic_fetch_add(&s->stuck, 1);
-          else if (result != 0) atomic_store(&s->runtime_error, 1);
-          else { fork_acquired(s, right); atomic_fetch_add(&s->meals_eaten, 1); fork_released(s, right); pthread_mutex_unlock(&s->forks[right]); }
+        if (clock_gettime(CLOCK_REALTIME, &deadline) != 0) {
+            atomic_store(&s->runtime_error, 1);
+        } else {
+            deadline.tv_sec += s->timeout_ms / 1000;
+            deadline.tv_nsec += (s->timeout_ms % 1000) * 1000000;
+            if (deadline.tv_nsec >= 1000000000L) { deadline.tv_sec++; deadline.tv_nsec -= 1000000000L; }
+            { int result = pthread_mutex_timedlock(&s->forks[right], &deadline);
+              if (result == ETIMEDOUT) atomic_fetch_add(&s->stuck, 1);
+              else if (result != 0) atomic_store(&s->runtime_error, 1);
+              else { right_acquired = 1; fork_acquired(s, right); }
+            }
         }
+        br = pthread_barrier_wait(&s->attempt_barrier);
+        if (br != 0 && br != PTHREAD_BARRIER_SERIAL_THREAD) atomic_store(&s->runtime_error, 1);
+        if (right_acquired) { fork_released(s, right); pthread_mutex_unlock(&s->forks[right]); }
         fork_released(s, left); pthread_mutex_unlock(&s->forks[left]);
         return NULL;
     }
@@ -396,14 +404,25 @@ static int phil_command(int argc, char **argv) {
         atomic_init(&s.owners[i], 0);
         if (pthread_mutex_init(&s.forks[i], NULL) != 0) { error_message("fork mutex initialization failed"); return 1; }
     }
-    if (mode == 0 && pthread_barrier_init(&s.left_barrier, NULL, (unsigned)n) != 0) { error_message("barrier initialization failed"); return 1; }
+    if (mode == 0) {
+        if (pthread_barrier_init(&s.left_barrier, NULL, (unsigned)n) != 0) { error_message("barrier initialization failed"); return 1; }
+        if (pthread_barrier_init(&s.attempt_barrier, NULL, (unsigned)n) != 0) {
+            if (pthread_barrier_destroy(&s.left_barrier) != 0) error_message("barrier cleanup failed");
+            error_message("barrier initialization failed"); return 1;
+        }
+    }
     if (mode == 2 && sem_init(&s.waiter, 0, (unsigned)(n - 1)) != 0) { error_message("waiter semaphore initialization failed"); return 1; }
     for (i = 0; i < (int)n; i++) { args[i].state = &s; args[i].id = i; if (pthread_create(&ids[i], NULL, phil_worker, &args[i]) != 0) break; created++; }
     if (created != n) { error_message("thread creation failed"); return 1; }
     for (i = 0; i < (int)n; i++) if (pthread_join(ids[i], NULL) != 0) atomic_store(&s.runtime_error, 1);
     if (atomic_load(&s.runtime_error)) { error_message("philosopher synchronization failed"); return 1; }
     printf("mode: %s\nphilosophers: %ld\nmeals: %ld\ndeadlock: %s\nstuck: %ld\nmeals_eaten: %ld\nviolations: %ld\n", mode_text, n, meals, atomic_load(&s.stuck) > 0 ? "yes" : "no", atomic_load(&s.stuck), atomic_load(&s.meals_eaten), atomic_load(&s.violations));
-    if (mode == 0) pthread_barrier_destroy(&s.left_barrier);
+    if (mode == 0) {
+        int destroy_error = 0;
+        if (pthread_barrier_destroy(&s.attempt_barrier) != 0) destroy_error = 1;
+        if (pthread_barrier_destroy(&s.left_barrier) != 0) destroy_error = 1;
+        if (destroy_error) { error_message("barrier destruction failed"); return 1; }
+    }
     if (mode == 2) sem_destroy(&s.waiter);
     for (i = 0; i < (int)n; i++) pthread_mutex_destroy(&s.forks[i]);
     free(s.forks); free(s.owners);

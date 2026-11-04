@@ -25,7 +25,7 @@ $(OUT): $(SRC)
 	$(CC) $(CFLAGS) -o $(OUT) $(SRC) $(LDFLAGS)
 
 clean:
-	rm -f $(OUT) $(OUT)_asan $(OUT)_tsan pagesim disksim deadsim synclab synclab_tsan output/*.txt output/*.json
+	rm -f $(OUT) $(OUT)_asan $(OUT)_tsan pagesim disksim deadsim synclab synclab_tsan memlab fslab output/*.txt output/*.json
 
 run: all
 	./$(OUT)
@@ -57,6 +57,8 @@ help:
 	@echo "make deadsim    Build the offline deadlock safety simulator"
 	@echo "make synclab    Build the standalone synchronization lab"
 	@echo "make synclab_tsan Build synclab with ThreadSanitizer"
+	@echo "make memlab     Build the standalone memory allocation lab"
+	@echo "make fslab      Build the standalone file allocation lab"
 
 pagesim:
 	$(CC) -std=c11 -D_DEFAULT_SOURCE -Wall -Wextra -Wpedantic -o pagesim tools/pagesim.c
@@ -73,7 +75,13 @@ synclab:
 synclab_tsan:
 	$(CC) -std=c11 -D_DEFAULT_SOURCE -Wall -Wextra -Wpedantic -pthread -fsanitize=thread -g -O1 -fno-omit-frame-pointer -o synclab_tsan tools/synclab.c
 
-.PHONY: all clean run demo headless test compare gantt help pagesim disksim deadsim synclab synclab_tsan
+memlab:
+	$(CC) -std=c11 -D_DEFAULT_SOURCE -Wall -Wextra -Wpedantic -o memlab tools/memlab.c
+
+fslab:
+	$(CC) -std=c11 -D_DEFAULT_SOURCE -Wall -Wextra -Wpedantic -o fslab tools/fslab.c
+
+.PHONY: all clean run demo headless test compare gantt help pagesim disksim deadsim synclab synclab_tsan memlab fslab
 tsan: exam_os_tsan
 
 exam_os_tsan: $(SRC)

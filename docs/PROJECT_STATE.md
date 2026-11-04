@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Exam OS is a userspace C simulation of student sessions competing for CPU time, memory frames, I/O buffering, and simulated disk service. It uses POSIX threads, semaphores, and ncurses; it is not a kernel and does not control real hardware. Standalone programs under `exam_os/tools` demonstrate offline page replacement, disk scheduling, and deadlock algorithms.
+Exam OS is a userspace C simulation of student sessions competing for CPU time, memory frames, I/O buffering, and simulated disk service. It uses POSIX threads, semaphores, and ncurses; it is not a kernel and does not control real hardware. Standalone programs under `exam_os/tools` demonstrate offline page replacement, disk scheduling, deadlock algorithms, synchronization, memory allocation, and file allocation.
 
 ## Modules
 
@@ -43,6 +43,8 @@ One line per source, header, tool, scenario, script, and test entry point curren
 - `exam_os/scenarios/exam_unsafe.txt` — unsafe but not yet deadlocked exam-server allocation state.
 - `exam_os/scenarios/exam_deadlock.txt` — exam-server detection and recovery scenario.
 - `exam_os/tools/deadsim.c` — standalone Banker's safety/request, detection, recovery, and wait-for graph tool.
+- `exam_os/tools/fslab.c` — standalone directory, free-space bitmap, and file block allocation lab.
+- `exam_os/tools/memlab.c` — standalone contiguous-fit, buddy, and slab allocator demonstrations.
 - `exam_os/tools/disksim.c` — standalone disk scheduling command-line tool.
 - `exam_os/tools/pagesim.c` — standalone FIFO, LRU, CLOCK, and OPT page reference tool.
 - `exam_os/tools/synclab.c` — standalone counter, readers-writers, and dining-philosophers synchronization lab.
@@ -52,7 +54,7 @@ One line per source, header, tool, scenario, script, and test entry point curren
 - `exam_os/scripts/diskcompare.sh` — live disk request capture and policy replay comparison.
 - `exam_os/scripts/gantt.sh` — ASCII chart generator for scheduler trace CSV.
 - `exam_os/scripts/pagecurve.sh` — multi-seed live page-fault/frame comparison.
-- `exam_os/tests/run_tests.sh` — numbered regression suite T1 through T48.
+- `exam_os/tests/run_tests.sh` — numbered regression suite T1 through T60.
 - `exam_os/tests/gate61.sh` — documentation gate and demonstration command runner.
 - `exam_os/tests/gate71.sh` — standalone synchronization lab and documentation gate.
 - `exam_os/tests/gate_all.sh` — currently an empty placeholder.
@@ -122,7 +124,7 @@ The parser rejects unknown or incomplete command-line arguments. Some integer va
 
 ## Tests
 
-The test runner names the tests T1 through T48; T8 is its final cleanup check and runs after T48.
+The test runner names the tests T1 through T60; T8 is its final cleanup check and runs after T60.
 
 - T1 builds the application.
 - T2 checks that the executable exists.
@@ -171,6 +173,18 @@ The test runner names the tests T1 through T48; T8 is its final cleanup check an
 - T46 checks ordered synclab philosophers finish all meals.
 - T47 checks the naive synclab philosophers demonstrate deadlock.
 - T48 checks invalid Peterson thread-count handling in synclab.
+- T49 checks first-fit external fragmentation in memlab.
+- T50 checks best-fit allocation results in memlab.
+- T51 checks worst-fit external fragmentation in memlab.
+- T52 checks buddy block rounding and internal fragmentation.
+- T53 checks slab size-class selection and slab counts.
+- T54 rejects a buddy heap whose size is not a power of two.
+- T55 checks contiguous fslab directory and bitmap output.
+- T56 checks linked fslab block chains.
+- T57 checks indexed fslab index blocks and data layout.
+- T58 checks freeing a file updates the directory and bitmap.
+- T59 checks allocation failure when the volume lacks enough blocks.
+- T60 rejects an unknown fslab allocation method.
 
 ## Invariants
 
@@ -216,6 +230,8 @@ The gate scripts should be run from the `exam_os` directory. Some gates require 
 - 5.1: deadsim, scenarios and demo.
 - 6.1: documentation set.
 - 7.1: synclab.
+- 7.2: memlab.
+- 7.3: fslab.
 - 2026-11-02: Completed memory race protection, configurable tick timing, interactive workload WAITING transitions, test restoration, and sanitizer validation for phases 1.5–2.2.
 - 2026-11-03: Added deterministic per-thread RNG streams and shared simulation clock sleep/notification infrastructure.
 - 2026-11-03: Made scheduler CPU accounting tick-driven with utilization, invariants, and optional dispatch tracing.

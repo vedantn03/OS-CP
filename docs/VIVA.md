@@ -125,7 +125,7 @@
 **A:** A dirty frame has been written, so replacing it records a writeback request. `exam_os/src/memory.c::memory_access_rw` marks writes, and `exam_os/src/memory.c::load_page` sends a dirty victim to the simulated disk queue before reuse.
 
 ### Q39. How does paging differ from segmentation?
-**A:** Paging uses fixed-size pages and frames, while segmentation describes variable-size logical regions. This code implements the page/frame model in `exam_os/src/memory.c::memory_access_rw`; it does not implement segment tables or segment allocation.
+**A:** Paging uses fixed-size pages and frames, while segmentation describes variable-size logical regions. This code implements the page/frame model in `exam_os/src/memory.c::memory_access_rw`; segment tables remain out of scope. The separate `memlab` demonstrates contiguous fit with `./memlab contiguous --policy first --holes "100 500 200 300 600" --requests "212 417 112 426"`, and buddy/slab allocation with `./memlab buddy --total 1024 --min-block 32 --requests "100 200 60 500"` and `./memlab slab --page-size 4096 --classes "16 32 64 128 256" --objects "12 24 40 100 200 12"`.
 
 ## Unit 5: File and I/O Management
 
@@ -145,7 +145,7 @@
 **A:** Otherwise each policy could receive a different workload, making movement comparisons confounded by request variation. `scripts/diskcompare.sh` records request batches and invokes the offline disk simulator for each algorithm using the same batch.
 
 ### Q45. Which file-system parts are missing?
-**A:** The project does not model file objects, directories, persistent metadata, file allocation methods, or free-space management. The simulated disk queue in `exam_os/src/disk.c::disk_enqueue` models requests and cylinder positions, not a file system.
+**A:** The live simulator does not model file objects or persistent file metadata; its disk queue in `exam_os/src/disk.c::disk_enqueue` models requests and cylinder positions. The standalone `fslab` demonstrates directory entries, a free-space bitmap, and contiguous, linked, and indexed allocation; for example, run `./fslab --blocks 10 --method indexed --files "alpha:3,beta:4" --free alpha`. It is an in-memory lab model, not a persistent file system.
 
 ## Unit 6: Operating System Kernel Internals and Android OS
 
