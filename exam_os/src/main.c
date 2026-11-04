@@ -16,6 +16,7 @@
 #include "clock.h"
 #include "rng.h"
 #include "invariants.h"
+#include "disk.h"
 
 // ─── Global instances ─────────────────────────────────────
 SystemState g_state;
@@ -131,6 +132,7 @@ int main(int argc, char *argv[]) {
     scheduler_init();
     memory_init();
     io_buffer_init();
+    disk_init();
     interrupt_init();
     if (!g_config.headless_mode) dashboard_init();
 
@@ -193,6 +195,7 @@ int main(int argc, char *argv[]) {
     pthread_join(t_scheduler, NULL);
     pthread_join(t_logger,    NULL);
     pthread_join(t_tick,      NULL);
+    disk_finish();
 
     // ─── Write final report ───────────────────────────────
     memory_write_trace();

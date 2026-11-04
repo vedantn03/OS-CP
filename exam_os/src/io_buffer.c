@@ -8,6 +8,7 @@
 #include "clock.h"
 #include "rng.h"
 #include "process.h"
+#include "disk.h"
 
 #define FLUSH_THRESHOLD 0.80  // flush when 80% full
 
@@ -136,6 +137,8 @@ static int flush_buffer() {
                     s.is_partial ? "[PARTIAL]" : "        ",
                     s.answer) >= 0) {
             flushed++;
+            disk_enqueue(disk_cyl_for_submission(s.pid, s.question_id),
+                         DISK_REQ_SUBMIT);
             pthread_mutex_lock(&g_state.lock);
             g_state.flushed_records++;
             pthread_mutex_unlock(&g_state.lock);
@@ -184,6 +187,7 @@ void *io_buffer_thread(void *arg) {
 
     int storm_triggered = 0;
     int last_flush_tick = 0;
+    int last_disk_tick = 0;
 
     while (1) {
         pthread_mutex_lock(&g_state.lock);
@@ -195,6 +199,7 @@ void *io_buffer_thread(void *arg) {
         if (!running) {
             // Final flush before exit
             flush_buffer();
+            disk_service();
             break;
         }
 
@@ -235,6 +240,10 @@ void *io_buffer_thread(void *arg) {
         if (fill >= FLUSH_THRESHOLD || tick - last_flush_tick >= 15) {
             flush_buffer();
             last_flush_tick = tick;
+        }
+        if (tick - last_disk_tick >= g_config.disk_batch) {
+            disk_service();
+            last_disk_tick = tick;
         }
 
         sim_sleep_ticks(1);

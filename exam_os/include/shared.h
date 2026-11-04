@@ -4,6 +4,7 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <time.h>
+#include "disk_sched.h"
 
 // ─── Constants ───────────────────────────────────────────
 #define MAX_STUDENTS     200
@@ -128,6 +129,11 @@ typedef struct {
     int       page_trace;
     int       thrash_control;
     int       thrash_pause;
+    DiskAlgo disk_algo;
+    int      disk_cylinders;
+    int      disk_start;
+    int      disk_batch;
+    int      disk_trace;
 } Config;
 
 // ─── System State (shared across all modules) ────────────
@@ -174,6 +180,15 @@ typedef struct {
     int   overload_signals;
     int   block_events;
     int   wakeups;
+
+    // Disk
+    long disk_movement;
+    int  disk_requests;
+    int  disk_served;
+    int  disk_dropped;
+    int  disk_batches;
+    int  disk_wb_requests;
+    int  disk_max_queue;
 
     // Processes
     PCB   processes[MAX_STUDENTS];

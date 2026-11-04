@@ -9,6 +9,42 @@ interactive workloads.
 ## Changelog
 
 - 4.1a: disk_sched module and disksim
+- 4.1b: live disk, trace replay, diskcompare
+- 5.1: standalone deadsim Banker deadlock lab
+
+## Disk integration model
+
+Submissions and dirty-page evictions become disk requests. Submission cylinders
+use `(pid * 131 + question_id * 17) % disk_cylinders`; page writebacks use a
+swap-region mapping based on the frame slot and page. Requests are collected
+into bounded batches and serviced by the configured FIFO, LIFO, SSTF, SCAN, or
+C-SCAN policy. The disk head starts at `disk_start`, initially moves up, and
+retains its head and direction between service batches. Optional tracing writes
+each batch in arrival order, allowing `scripts/diskcompare.sh` to replay the
+same stream under all five policies.
+
+Disk configuration includes `DISK_ALGO`/`--disk`, `DISK_CYLINDERS`/`--cylinders`,
+`DISK_START`/`--disk-start`, `DISK_BATCH`/`--disk-batch`, and
+`DISK_TRACE`/`--disk-trace`. Cylinder count is 10..10000, the start must be
+within that range, batch size is 1..1000, and trace is 0 or 1.
+
+The lock-order chains are `mem_lock -> disk_lock -> g_state.lock` for dirty
+writeback enqueue and `svc_lock -> disk_lock -> g_state.lock` for disk service.
+Disk service never sleeps or performs blocking work while holding the queue
+lock.
+
+## Deadlock lab
+
+`deadsim` is a standalone Banker safety lab; it is not connected to the live
+threaded admission path. The scenario format declares `resources N`, one
+`available` vector, and one line per exam session:
+
+    session S0 allocation 0 1 0 maximum 7 5 3
+
+The three resource classes used in the exam framing are grader slots, database
+connections, and question-bank licences. The tool reports a safe sequence or
+the sessions left deadlocked, and returns 0 for a safe state or 1 for an
+unsafe state. Build it with `make deadsim`; use `--string` or `--file`.
 
 ## Disk scheduling model
 

@@ -38,6 +38,10 @@ int invariants_run(void) {
     int dirty_writebacks;
     int frames_used;
     int page_faults;
+    long disk_movement;
+    int disk_requests;
+    int disk_served;
+    int disk_dropped;
 
     invariant_file = fopen("output/invariants.txt", "w");
     failures = 0;
@@ -66,6 +70,10 @@ int invariants_run(void) {
     dirty_writebacks = g_state.dirty_writebacks;
     frames_used = g_state.frames_used;
     page_faults = g_state.page_faults;
+    disk_movement = g_state.disk_movement;
+    disk_requests = g_state.disk_requests;
+    disk_served = g_state.disk_served;
+    disk_dropped = g_state.disk_dropped;
     memcpy(processes, g_state.processes, sizeof(processes));
     pthread_mutex_unlock(&g_state.lock);
 
@@ -134,6 +142,11 @@ int invariants_run(void) {
     report_check("I11", evictions <= page_faults &&
                  dirty_writebacks <= evictions &&
                  frames_used <= g_config.memory_frames, msg);
+
+    snprintf(msg, sizeof(msg), "served=%d dropped=%d requests=%d movement=%ld",
+             disk_served, disk_dropped, disk_requests, disk_movement);
+    report_check("I12", disk_served + disk_dropped == disk_requests &&
+                 disk_movement >= 0, msg);
 
     if (invariant_file) fclose(invariant_file);
     invariant_file = NULL;

@@ -304,6 +304,55 @@ elif [ "$?" -ne 1 ]; then
 fi
 pass T38
 
+for DISK_ALGO in FIFO LIFO SSTF SCAN CSCAN
+do
+    "$BIN" --headless --strict --tick-ms 10 --workload INTERACTIVE \
+        --students 12 --duration 300 --algo RR --frames 16 --write-pct 40 \
+        --disk "$DISK_ALGO" --disk-trace --seed 5 >"$TMP/disk.out" 2>&1 ||
+        fail T39 "$DISK_ALGO disk run failed"
+    if grep -q '^FAIL ' output/invariants.txt; then
+        fail T39 "$DISK_ALGO disk invariant failure"
+    fi
+    requests=$(grep 'Disk Requests' output/summary.txt | sed 's/.*: *//; s/[^0-9].*//')
+    [ "$requests" -gt 0 ] || fail T39 "$DISK_ALGO had no disk requests"
+    [ -s output/disktrace.txt ] || fail T39 "$DISK_ALGO trace missing"
+    head -1 output/disktrace.txt | grep -q '^# cylinders=' ||
+        fail T39 "$DISK_ALGO trace header missing"
+done
+if "$BIN" --headless --disk BOGUS >"$TMP/bad-disk.out" 2>&1; then
+    fail T39 "invalid disk algorithm accepted"
+fi
+if "$BIN" --headless --disk-start 999 >"$TMP/bad-disk-start.out" 2>&1; then
+    fail T39 "invalid disk start accepted"
+fi
+pass T39
+
+make deadsim >/dev/null || fail T40 "deadsim build failed"
+cat >"$TMP/dead-safe.txt" <<'EOF'
+resources 3
+available 3 3 2
+session S0 allocation 0 1 0 maximum 7 5 3
+session S1 allocation 2 0 0 maximum 3 2 2
+session S2 allocation 3 0 2 maximum 9 0 2
+session S3 allocation 2 1 1 maximum 2 2 2
+session S4 allocation 0 0 2 maximum 4 3 3
+EOF
+"$PWD/deadsim" --file "$TMP/dead-safe.txt" >"$TMP/dead-safe.out" ||
+    fail T40 "safe deadlock scenario failed"
+grep -q '^safe: yes$' "$TMP/dead-safe.out" ||
+    fail T40 "safe scenario was not reported safe"
+printf '%s\n' \
+    'resources 2' \
+    'available 0 0' \
+    'session S0 allocation 1 0 maximum 1 1' \
+    'session S1 allocation 0 1 maximum 1 1' >"$TMP/dead-unsafe.txt"
+if "$PWD/deadsim" --file "$TMP/dead-unsafe.txt" >"$TMP/dead-unsafe.out"; then
+    fail T40 "unsafe deadlock scenario was accepted"
+fi
+grep -q '^deadlocked: S0 S1$' "$TMP/dead-unsafe.out" ||
+    fail T40 "deadlocked sessions were not reported"
+pass T40
+
 make clean >/dev/null
 pass T8
-printf 'All T1-T38 tests passed.\n'
+printf 'All T1-T40 tests passed.\n'

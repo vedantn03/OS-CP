@@ -5,6 +5,7 @@
 #include <limits.h>
 #include <ctype.h>
 #include "config.h"
+#include "disk_sched.h"
 
 int config_parse_sched_algo(const char *value, SchedAlgo *algo) {
     char normalized[32];
@@ -106,6 +107,11 @@ void config_load_defaults(Config *cfg) {
     cfg->page_trace      = 0;
     cfg->thrash_control  = 0;
     cfg->thrash_pause    = 40;
+    cfg->disk_algo       = DISK_FIFO;
+    cfg->disk_cylinders  = 200;
+    cfg->disk_start      = 0;
+    cfg->disk_batch      = 20;
+    cfg->disk_trace      = 0;
 }
 
 int config_parse_file(Config *cfg, const char *filepath) {
@@ -151,6 +157,10 @@ int config_parse_file(Config *cfg, const char *filepath) {
         else if (strcmp(key, "PAGE_TRACE")      == 0 && numeric) cfg->page_trace      = (int)number;
         else if (strcmp(key, "THRASH_CONTROL")  == 0 && numeric) cfg->thrash_control  = (int)number;
         else if (strcmp(key, "THRASH_PAUSE")    == 0 && numeric) cfg->thrash_pause    = (int)number;
+        else if (strcmp(key, "DISK_CYLINDERS")  == 0 && numeric) cfg->disk_cylinders = (int)number;
+        else if (strcmp(key, "DISK_START")      == 0 && numeric) cfg->disk_start = (int)number;
+        else if (strcmp(key, "DISK_BATCH")      == 0 && numeric) cfg->disk_batch = (int)number;
+        else if (strcmp(key, "DISK_TRACE")      == 0 && numeric) cfg->disk_trace = (int)number;
         else if (strcmp(key, "WORKLOAD")         == 0) {
             for (char *p = val; *p; p++) *p = (char)toupper((unsigned char)*p);
             if (strcmp(val, "INTERACTIVE") == 0)
@@ -172,6 +182,13 @@ int config_parse_file(Config *cfg, const char *filepath) {
         else if (strcmp(key, "PAGE_REPLACE") == 0) {
             if (!config_parse_page_algo(val, &cfg->page_algo)) {
                 fprintf(stderr, "ERROR: PAGE_REPLACE must be LRU, FIFO, or CLOCK\n");
+                fclose(f);
+                return 0;
+            }
+        }
+        else if (strcmp(key, "DISK_ALGO") == 0) {
+            if (disk_algo_parse(val, &cfg->disk_algo) != 0) {
+                fprintf(stderr, "ERROR: DISK_ALGO must be FIFO, LIFO, SSTF, SCAN, or CSCAN\n");
                 fclose(f);
                 return 0;
             }
@@ -250,6 +267,19 @@ int config_parse_args(Config *cfg, int argc, char *argv[]) {
         else if (strcmp(argv[i], "--page-trace") == 0) cfg->page_trace = 1;
         else if (strcmp(argv[i], "--thrash-control") == 0 && i+1 < argc) cfg->thrash_control = atoi(argv[++i]);
         else if (strcmp(argv[i], "--thrash-pause") == 0 && i+1 < argc) cfg->thrash_pause = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--disk") == 0 && i+1 < argc) {
+            if (disk_algo_parse(argv[++i], &cfg->disk_algo) != 0) {
+                fprintf(stderr, "ERROR: --disk must be FIFO, LIFO, SSTF, SCAN, or CSCAN\n");
+                return 0;
+            }
+        }
+        else if (strcmp(argv[i], "--cylinders") == 0 && i+1 < argc)
+            cfg->disk_cylinders = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--disk-start") == 0 && i+1 < argc)
+            cfg->disk_start = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--disk-batch") == 0 && i+1 < argc)
+            cfg->disk_batch = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--disk-trace") == 0) cfg->disk_trace = 1;
         else if (strcmp(argv[i], "--help")   == 0) {
             printf("Usage: ./exam_os [options]\n");
             printf("  --students N   Number of students\n");
@@ -290,6 +320,11 @@ int config_parse_args(Config *cfg, int argc, char *argv[]) {
             printf("  --burst-max N   Maximum CPU burst length\n");
             printf("  --think-min N   Minimum think time\n");
             printf("  --think-max N   Maximum think time\n");
+            printf("  --disk NAME     Disk scheduling algorithm\n");
+            printf("  --cylinders N   Disk cylinder count\n");
+            printf("  --disk-start N  Initial disk head cylinder\n");
+            printf("  --disk-batch N  Disk service interval in ticks\n");
+            printf("  --disk-trace    Write disk request trace\n");
             exit(EXIT_SUCCESS);
         }
         else {
@@ -351,6 +386,14 @@ int config_validate(const Config *cfg, char *error, size_t error_size) {
         snprintf(error, error_size, "THRASH_CONTROL must be 0 or 1");
     else if (cfg->thrash_pause < 1 || cfg->thrash_pause > 1000)
         snprintf(error, error_size, "THRASH_PAUSE must be 1..1000");
+    else if (cfg->disk_cylinders < 10 || cfg->disk_cylinders > 10000)
+        snprintf(error, error_size, "DISK_CYLINDERS must be 10..10000");
+    else if (cfg->disk_start < 0 || cfg->disk_start >= cfg->disk_cylinders)
+        snprintf(error, error_size, "DISK_START must be within DISK_CYLINDERS");
+    else if (cfg->disk_batch < 1 || cfg->disk_batch > 1000)
+        snprintf(error, error_size, "DISK_BATCH must be 1..1000");
+    else if (cfg->disk_trace < 0 || cfg->disk_trace > 1)
+        snprintf(error, error_size, "DISK_TRACE must be 0 or 1");
     else if (cfg->demand_min < 1)
         snprintf(error, error_size, "DEMAND_MIN must be at least 1");
     else if (cfg->demand_max < cfg->demand_min)
@@ -381,6 +424,11 @@ void config_print(Config *cfg) {
     printf("│ Trace        : %-26s │\n", cfg->trace ? "ON" : "OFF");
     printf("│ Workload     : %-26s │\n",
            cfg->workload == WORKLOAD_INTERACTIVE ? "INTERACTIVE" : "LEGACY");
+    printf("│ Disk Algo    : %-26s │\n", disk_algo_name(cfg->disk_algo));
+    printf("│ Disk Cylinders: %-25d │\n", cfg->disk_cylinders);
+    printf("│ Disk Start   : %-26d │\n", cfg->disk_start);
+    printf("│ Disk Batch   : %-26d │\n", cfg->disk_batch);
+    printf("│ Disk Trace   : %-26s │\n", cfg->disk_trace ? "ON" : "OFF");
     printf("│ Demand Min   : %-26d │\n", cfg->demand_min);
     printf("│ Demand Max   : %-26d │\n", cfg->demand_max);
     printf("│ Burst Min    : %-26d │\n", cfg->burst_min);

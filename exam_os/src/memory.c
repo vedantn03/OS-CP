@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <time.h>
 #include "memory.h"
+#include "disk.h"
 #include "logger.h"
 #include "clock.h"
 #include "rng.h"
@@ -153,6 +154,8 @@ static void load_page(int pid, int virtual_page, int frame, int is_write) {
             pthread_mutex_lock(&g_state.lock);
             g_state.dirty_writebacks++;
             pthread_mutex_unlock(&g_state.lock);
+            disk_enqueue(disk_cyl_for_page(prev_pid, prev_page),
+                         DISK_REQ_WRITEBACK);
             log_event("WARN", "MEMORY", msg);
             page_tables[prev_pid][prev_page].dirty = 0;
         }

@@ -183,6 +183,17 @@ void logger_write_report() {
             g_state.deferred_arrival_ticks);
     fprintf(f, "║   Hit Rate          : %-17.1f%% ║\n", hit_rate);
     fprintf(f, "╠══════════════════════════════════════════╣\n");
+    fprintf(f, "║ Disk Scheduler                           ║\n");
+    fprintf(f, "║   Disk Scheduler     : %-18s ║\n", disk_algo_name(g_config.disk_algo));
+    fprintf(f, "║   Disk Requests      : %-18d ║\n", g_state.disk_requests);
+    fprintf(f, "║   Disk Head Movement : %-18ld ║\n", g_state.disk_movement);
+    fprintf(f, "║   Avg Seek Per Request: %-17.1f ║\n",
+            g_state.disk_served > 0
+                ? (double)g_state.disk_movement / g_state.disk_served : 0.0);
+    fprintf(f, "║   Disk Max Queue     : %-18d ║\n", g_state.disk_max_queue);
+    fprintf(f, "║   Disk Writeback Requests: %-13d ║\n", g_state.disk_wb_requests);
+    fprintf(f, "║   Disk Dropped       : %-18d ║\n", g_state.disk_dropped);
+    fprintf(f, "╠══════════════════════════════════════════╣\n");
     fprintf(f, "║ I/O BUFFER                               ║\n");
     fprintf(f, "║   Total Submissions : %-18d ║\n", g_state.total_submissions);
     fprintf(f, "║   Dropped           : %-18d ║\n", g_state.dropped_submissions);
