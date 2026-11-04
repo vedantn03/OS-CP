@@ -6,9 +6,9 @@ This is a 12 minutes walkthrough of a userspace exam-server simulation and its s
 
 Use Ubuntu or WSL with `build-essential` and `libncurses-dev` installed. Start in the repository, then change to `exam_os`; the commands below assume that directory is the current directory.
 
-Make the terminal at least 80 columns by 31 rows for the dashboard. Build the simulator and tools before presenting. Open this document and the links to [the architecture](ARCHITECTURE.md), [the experiment notes](EXPERIMENTS.md), and [saved results](results/). A zero-byte `assets/dashboard.png` is not a usable screenshot.
+Build the simulator and tools before presenting. Open this document and the links to [the architecture](ARCHITECTURE.md), [the experiment notes](EXPERIMENTS.md), and [saved results](results/).
 
-The scripted terminal commands below are bounded headless runs or offline tools. Each line can be run from `exam_os`. The dashboard command is shown separately as an optional interactive action and is not part of the automated command list.
+The scripted terminal commands below are bounded headless runs or offline tools. Each line can be run from `exam_os`.
 
 ## Demo script
 
@@ -98,7 +98,7 @@ The standalone synchronization lab is separate from the live simulator. Build it
 
 Say: “The offline tools provide fixed-input algorithm evidence, while live results depend on thread timing. The results folder has saved reports, and the limitations page separates simulated mechanisms from operating-system features that are out of scope.”
 
-The standalone `fslab` demonstrates directory entries, free-space tracking, and three file-block allocation layouts; its runnable examples are in [the experiments guide](EXPERIMENTS.md#file-allocation-lab).
+The standalone `fslab` demonstrates directory entries, free-space tracking, and three file-block allocation layouts; its runnable examples are in [the experiments guide](EXPERIMENTS.md#file-system-lab).
 
 Show the generated report from the quick comparison and the repository’s deadlock example:
 
@@ -106,12 +106,6 @@ Show the generated report from the quick comparison and the repository’s deadl
 $ head -20 /tmp/compare/compare.md
 $ head -20 /tmp/deadlock/deadlock.md
 $ cat ../docs/results/deadlock.md
-```
-
-Optional interactive dashboard, not run by the documentation gate:
-
-```console
-$! ./exam_os --demo
 ```
 
 ## Backup plan

@@ -6,11 +6,10 @@ Exam OS is a userspace C simulation of student sessions competing for CPU time, 
 
 ## Modules
 
-One line per source, header, tool, scenario, script, and test entry point currently in the repository:
+Selected source modules, headers, standalone tools, scenarios, scripts, and test entry points:
 
 - `exam_os/src/clock.c` — shared sleep and tick timing helpers.
 - `exam_os/src/config.c` — defaults, config-file parsing, command-line parsing, validation, and configuration display.
-- `exam_os/src/dashboard.c` — ncurses dashboard rendering and dashboard thread.
 - `exam_os/src/disk_sched.c` — pure FIFO, LIFO, SSTF, SCAN, and C-SCAN ordering and movement calculations.
 - `exam_os/src/disk.c` — live disk request queue, cylinder mapping, and service accounting.
 - `exam_os/src/interrupt.c` — interrupt vector table, queue, handlers, and timeout/overload checks.
@@ -24,7 +23,6 @@ One line per source, header, tool, scenario, script, and test entry point curren
 - `exam_os/src/scheduler.c` — ready queue, arrivals, wakeups, scheduling policies, CPU accounting, and trace generation.
 - `exam_os/include/clock.h` — clock helper declarations.
 - `exam_os/include/config.h` — configuration fields, limits, and option declarations.
-- `exam_os/include/dashboard.h` — dashboard entry points.
 - `exam_os/include/disk_sched.h` — disk scheduling types and API.
 - `exam_os/include/disk.h` — live disk service API.
 - `exam_os/include/interrupt.h` — interrupt kinds and registration/dispatch API.
@@ -93,7 +91,7 @@ Command-line defaults below are the values loaded by `config_load_defaults` befo
 | `--mlfq-boost N` | 100 | Non-negative ticks; zero disables boosts. |
 | `--page NAME` | LRU | LRU, FIFO, or CLOCK. |
 | `--demo` | off | Flag enables demo mode. |
-| `--headless` | off | Flag disables the dashboard. |
+| `--headless` | off | Flag disables the interactive ncurses display. |
 | `--strict` | off | Flag requests nonzero exit when invariants fail. |
 | `--tick-ms N` | 100 | 1..60000 milliseconds. |
 | `--trace` | off | Flag writes scheduler trace. |
@@ -124,7 +122,7 @@ The parser rejects unknown or incomplete command-line arguments. Some integer va
 
 ## Tests
 
-The test runner names the tests T1 through T60; T8 is its final cleanup check and runs after T60.
+The test runner names the checks T1 through T67; T8 is its final cleanup check and runs after T67. T43 and T44 repeat the same Peterson counter case. There are no unused T numbers between T1 and T67; T8's placement at the end is intentional.
 
 - T1 builds the application.
 - T2 checks that the executable exists.
@@ -185,6 +183,13 @@ The test runner names the tests T1 through T60; T8 is its final cleanup check an
 - T58 checks freeing a file updates the directory and bitmap.
 - T59 checks allocation failure when the volume lacks enough blocks.
 - T60 rejects an unknown fslab allocation method.
+- T61 checks first-fit textbook total and largest free holes.
+- T62 checks best-fit textbook allocation and fragmentation totals.
+- T63 checks worst-fit textbook allocation and fragmentation totals.
+- T64 checks buddy block rounding for the textbook requests.
+- T65 checks fslab free-space counts and complete restoration for all methods.
+- T66 rejects duplicate fslab file names.
+- T67 rejects freeing a missing fslab file name.
 
 ## Invariants
 
@@ -232,6 +237,7 @@ The gate scripts should be run from the `exam_os` directory. Some gates require 
 - 7.1: synclab.
 - 7.2: memlab.
 - 7.3: fslab.
+- 7.2/7.3: memlab and fslab.
 - 2026-11-02: Completed memory race protection, configurable tick timing, interactive workload WAITING transitions, test restoration, and sanitizer validation for phases 1.5–2.2.
 - 2026-11-03: Added deterministic per-thread RNG streams and shared simulation clock sleep/notification infrastructure.
 - 2026-11-03: Made scheduler CPU accounting tick-driven with utilization, invariants, and optional dispatch tracing.

@@ -2,7 +2,7 @@
 
 ## Not implemented
 
-Peterson’s solution, readers-writers synchronization, and dining philosophers exist only in the standalone `synclab` lab; they are not integrated into the live simulation. The live simulation still has no readers-writers locking or Peterson locking; its synchronization uses mutexes and semaphores for its existing shared structures. Contiguous first/best/worst fit with fragmentation, buddy allocation, and slab allocation exist only in the standalone `memlab`; they are not part of the live page-frame model. Directory entries, a free-space bitmap, and contiguous, linked, and indexed file allocation exist only in the standalone `fslab`; it is not a persistent file system and is not integrated into the live simulator. Segmentation, a system call interface, Android architecture, fork/exec, and swapping remain outside the implementation. Deadlock handling exists only in the standalone `deadsim` tool; it is not part of the live simulation. The project does not model kernel/user address spaces or booting a kernel.
+Peterson’s solution, readers-writers synchronization, and dining philosophers exist only in the standalone `synclab` lab; they are not integrated into the live simulation. The live simulation still has no readers-writers locking or Peterson locking; its synchronization uses mutexes and semaphores for its existing shared structures. Contiguous first/best/worst fit with fragmentation, buddy allocation, and slab allocation exist only in the standalone `memlab`; they are not part of the live simulator, which still uses fixed arrays and page frames. Directory entries, a free-space bitmap, and contiguous, linked, and indexed file allocation exist only in the standalone `fslab`; this file system lab is not integrated into the live simulator, which still uses fixed arrays and page frames, and is not a persistent file system. Segmentation, a system call interface, Android architecture, fork/exec, and swapping remain outside the implementation. Deadlock handling exists only in the standalone `deadsim` tool; it is not part of the live simulation. The project does not model kernel/user address spaces or booting a kernel.
 
 ## Modelling simplifications
 
@@ -22,7 +22,7 @@ The configuration parser converts most numeric command-line values before valida
 
 The live disk queue is bounded; requests can be dropped when it is full. The I/O submission ring also drops an attempted record when it has no free slot. These are model policies visible in `exam_os/src/disk.c::disk_enqueue` and `exam_os/src/io_buffer.c::io_buffer_submit`.
 
-The dashboard requires a suitable terminal and is not available in headless mode. The tool outputs and saved reports are text artifacts, not a graphical device display.
+The tool outputs and saved reports are text artifacts, not a graphical device display.
 
 The offline page tool supports OPT because it receives the complete reference string. The live pager receives references incrementally and supports only FIFO, LRU, and CLOCK. The two interfaces therefore demonstrate different policy sets.
 
@@ -32,7 +32,6 @@ The disk movement metric is total cylinder distance calculated by the selected p
 
 The interrupt queue and logging queue are finite. Their queue-full paths update drop counters; they do not provide a lossless event journal under arbitrary overload.
 
-The terminal dashboard is an observational display of shared model state. Its snapshots do not provide a synchronized view of real operating-system activity.
 
 The random workload is synthetic rather than a trace of actual students or applications. The model does not claim that its configured demand, burst, locality, or think-time distributions match a production exam service.
 
@@ -42,7 +41,7 @@ The demo and acceptance scripts expect a Unix-like shell and the tools listed in
 
 The legacy and interactive workloads model different behaviors. Comparisons should hold the workload type and other configuration settings fixed when examining a scheduling policy.
 
-The dashboard and text reports expose only the counters included in the program. They do not provide production telemetry, process isolation, or a complete operating-system resource audit.
+Text reports expose only the counters included in the program. They do not provide production telemetry, process isolation, or a complete operating-system resource audit.
 
 The scheduler trace has a fixed in-memory row capacity. When that capacity is exceeded, the trace writer reports dropped rows rather than producing a complete unlimited history.
 

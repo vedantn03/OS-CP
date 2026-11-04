@@ -214,7 +214,11 @@ static int slab_command(int argc, char **argv) {
 
 int main(int argc, char **argv) {
     int result;
-    if (argc < 2) { error_message("usage: memlab contiguous|buddy|slab ..."); return 2; }
+    if (argc == 2 && strcmp(argv[1], "--help") == 0) {
+        puts("usage:\n  memlab contiguous --policy first|best|worst --holes \"KB ...\" --requests \"KB ...\"\n  memlab buddy --total KB --min-block KB --requests \"KB ...\"\n  memlab slab --page-size BYTES --classes \"BYTES ...\" --objects \"BYTES ...\"");
+        return 0;
+    }
+    if (argc < 2) { error_message("usage: memlab contiguous|buddy|slab ... (use --help)"); return 2; }
     if (strcmp(argv[1], "contiguous") == 0) result = contiguous_command(argc - 2, argv + 2);
     else if (strcmp(argv[1], "buddy") == 0) result = buddy_command(argc - 2, argv + 2);
     else if (strcmp(argv[1], "slab") == 0) result = slab_command(argc - 2, argv + 2);

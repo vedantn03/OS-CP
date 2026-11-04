@@ -2,20 +2,7 @@ CC      ?= gcc
 CFLAGS  ?= -std=c11 -D_DEFAULT_SOURCE -Wall -Wextra -Wpedantic -Iinclude -pthread
 LDFLAGS ?= -lncurses -pthread -lrt
 
-SRC = src/main.c \
-      src/config.c \
-      src/logger.c \
-      src/scheduler.c \
-      src/process.c \
-      src/invariants.c \
-      src/memory.c \
-      src/io_buffer.c \
-      src/interrupt.c \
-      src/dashboard.c \
-      src/clock.c \
-      src/rng.c \
-      src/disk.c \
-      src/disk_sched.c
+SRC = $(wildcard src/*.c)
 
 OUT = exam_os
 
@@ -36,7 +23,7 @@ demo: all
 headless: all
 	./$(OUT) --headless
 
-test:
+test: all pagesim disksim deadsim synclab memlab fslab
 	sh tests/run_tests.sh
 
 compare: all
@@ -48,7 +35,7 @@ gantt: all
 
 help:
 	@echo "make run       Run the simulator"
-	@echo "make headless  Run without the dashboard"
+	@echo "make headless  Run without the interactive display"
 	@echo "make test      Run the test suite"
 	@echo "make compare   Generate scheduler comparison results"
 	@echo "make gantt     Generate a trace and ASCII Gantt chart"

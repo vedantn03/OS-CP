@@ -4,7 +4,7 @@
 
 Exam OS is a C userspace simulation of an exam server. Student sessions compete for simulated CPU time, page frames, submission-buffer space, and disk service. It demonstrates operating-systems concepts through a threaded model and separate deterministic algorithm tools.
 
-It is not a kernel. It does not control real memory, processes, disks, or hardware interrupts. The live program runs as a POSIX process using threads, mutexes, semaphores, and an ncurses dashboard.
+It is not a kernel. It does not control real memory, processes, disks, or hardware interrupts. The live program runs as a POSIX process using threads, mutexes, semaphores, and ncurses.
 
 The live simulator includes multiple CPU scheduling policies, process states, demand paging, FIFO/LRU/CLOCK replacement, a bounded I/O buffer, simulated disk scheduling, timeout and overload events, logging, and invariant checks. Separate tools cover offline page replacement, disk scheduling, deadlock algorithms, synchronization, memory allocation, and file allocation.
 
@@ -23,7 +23,7 @@ Build from the repository root:
 cd exam_os && make
 ```
 
-Run the dashboard in a terminal at least 80 columns by 31 rows:
+Run the interactive simulator in a terminal at least 80 columns by 31 rows:
 
 ```console
 ./exam_os
@@ -85,16 +85,6 @@ make fslab
 - [Limitations](docs/LIMITATIONS.md)
 - [Current project state](docs/PROJECT_STATE.md)
 - [Saved results](docs/results/)
-
-## Kernel Studio dashboard
-
-The local browser dashboard connects to the actual simulator and standalone labs through a small local API server. On Windows with Node.js installed, run from the `exam_os` directory:
-
-```console
-node dashboard/server.js
-```
-
-Open [http://127.0.0.1:8766](http://127.0.0.1:8766) in a browser. The server binds only to localhost, validates every experiment request, and invokes fixed project executables without passing input through a shell. GCC is needed to build the standalone labs. Building the full simulator also requires GNU Make and ncurses. In WSL, `python3 dashboard/server.py` provides the same interface.
 
 ## Testing
 

@@ -65,7 +65,7 @@ Legend: IMPLEMENTED (in the live simulator and tested), LAB (a standalone tool i
 | I/O buffering | IMPLEMENTED | exam_os/src/io_buffer.c::io_buffer_submit and exam_os/src/io_buffer.c::flush_buffer | make test T39 |
 | Disk scheduling (FIFO, LIFO, SSTF, SCAN, C-SCAN) | IMPLEMENTED | exam_os/src/disk_sched.c::disk_sched_run is used by live disk service. | docs/results/disk.md |
 | File concept, directories and allocation methods | LAB | exam_os/tools/fslab.c::print_directory lists simulated file entries and their allocation locations. | `./fslab --blocks 16 --method contiguous --files "alpha:3,beta:4,gamma:5"` |
-| File system implementation and free-space management | LAB | exam_os/tools/fslab.c::run maintains the free-space bitmap; exam_os/tools/fslab.c::allocate_contiguous and exam_os/tools/fslab.c::allocate_scattered implement allocation strategies. | `./fslab --blocks 10 --method indexed --files "alpha:3,beta:4" --free alpha` |
+| File system implementation and free-space management | PARTIAL | A standalone free-space bitmap, directory, and contiguous, linked, and indexed allocation methods exist in exam_os/tools/fslab.c::run and exam_os/tools/fslab.c::allocate_scattered; inodes, journaling, mounting, and permissions do not exist. | `./fslab --blocks 10 --method indexed --files "alpha:3,beta:4" --free alpha` |
 
 ## Unit 6: Operating System Kernel Internals and Android OS
 

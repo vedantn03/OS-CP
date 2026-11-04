@@ -436,8 +436,11 @@ pass T57
 grep -q '^directory: beta(size=4,index=4)$' "$TMP/fslab-free.out" && grep -q '^bitmap: 0000111110$' "$TMP/fslab-free.out" || fail T58 "fslab free-space update mismatch"
 pass T58
 
-./fslab --blocks 5 --method contiguous --files "alpha:3,beta:3" >"$TMP/fslab-full.out" || fail T59 "fslab capacity case failed"
+if ./fslab --blocks 5 --method contiguous --files "alpha:3,beta:3" >"$TMP/fslab-full.out" 2>&1; then
+    fail T59 "fslab full-volume allocation failure returned success"
+fi
 grep -q '^files_allocated: 1$' "$TMP/fslab-full.out" && grep -q '^files_failed: 1$' "$TMP/fslab-full.out" || fail T59 "fslab full-volume result mismatch"
+grep -q '^fslab: one or more files could not be allocated' "$TMP/fslab-full.out" || fail T59 "fslab full-volume error was unclear"
 pass T59
 
 if ./fslab --blocks 8 --method bogus --files "alpha:2" >/dev/null 2>&1; then
@@ -447,6 +450,44 @@ elif [ "$?" -ne 2 ]; then
 fi
 pass T60
 
+first=$(./memlab contiguous --policy first --holes "100 500 200 300 600" --requests "212 417 112 426")
+printf '%s\n' "$first" | grep -q '^total_free: 959$' && printf '%s\n' "$first" | grep -q '^largest_free: 300$' && printf '%s\n' "$first" | grep -q '^fragmented_free: 659$' || fail T61 "first-fit textbook fragmentation mismatch"
+pass T61
+
+best=$(./memlab contiguous --policy best --holes "100 500 200 300 600" --requests "212 417 112 426")
+printf '%s\n' "$best" | grep -q '^allocated: 4$' && printf '%s\n' "$best" | grep -q '^total_free: 533$' && printf '%s\n' "$best" | grep -q '^largest_free: 174$' && printf '%s\n' "$best" | grep -q '^fragmented_free: 359$' || fail T62 "best-fit textbook fragmentation mismatch"
+pass T62
+
+worst=$(./memlab contiguous --policy worst --holes "100 500 200 300 600" --requests "212 417 112 426")
+printf '%s\n' "$worst" | grep -q '^allocated: 3$' && printf '%s\n' "$worst" | grep -q '^failed: 1$' && printf '%s\n' "$worst" | grep -q '^total_free: 959$' && printf '%s\n' "$worst" | grep -q '^largest_free: 300$' && printf '%s\n' "$worst" | grep -q '^fragmented_free: 659$' || fail T63 "worst-fit textbook fragmentation mismatch"
+pass T63
+
+buddy=$(./memlab buddy --total 1024 --min-block 32 --requests "100 240 64 256")
+printf '%s\n' "$buddy" | grep -q '^allocated: 4$' && printf '%s\n' "$buddy" | grep -q '^allocated_bytes: 704$' && printf '%s\n' "$buddy" | grep -q '^internal_fragmentation: 44$' || fail T64 "buddy textbook rounding mismatch"
+pass T64
+
+./fslab --blocks 10 --method contiguous --files "alpha:3" >"$TMP/fslab-count-contiguous.out" || fail T65 "fslab contiguous bitmap count failed"
+grep -q '^free_blocks: 7$' "$TMP/fslab-count-contiguous.out" || fail T65 "fslab contiguous free count mismatch"
+./fslab --blocks 10 --method linked --files "alpha:3" >"$TMP/fslab-count-linked.out" || fail T65 "fslab linked bitmap count failed"
+grep -q '^free_blocks: 7$' "$TMP/fslab-count-linked.out" || fail T65 "fslab linked free count mismatch"
+./fslab --blocks 10 --method indexed --files "alpha:3" >"$TMP/fslab-count-indexed.out" || fail T65 "fslab indexed bitmap count failed"
+grep -q '^free_blocks: 6$' "$TMP/fslab-count-indexed.out" || fail T65 "fslab indexed free count mismatch"
+./fslab --blocks 10 --method indexed --files "alpha:3" --free alpha >"$TMP/fslab-count-restored.out" || fail T65 "fslab indexed free restoration failed"
+grep -q '^free_blocks: 10$' "$TMP/fslab-count-restored.out" || fail T65 "fslab indexed free count was not restored"
+./fslab --blocks 10 --method contiguous --files "alpha:3" --free alpha >"$TMP/fslab-count-contiguous-restored.out" || fail T65 "fslab contiguous free restoration failed"
+grep -q '^free_blocks: 10$' "$TMP/fslab-count-contiguous-restored.out" || fail T65 "fslab contiguous free count was not restored"
+./fslab --blocks 10 --method linked --files "alpha:3" --free alpha >"$TMP/fslab-count-linked-restored.out" || fail T65 "fslab linked free restoration failed"
+grep -q '^free_blocks: 10$' "$TMP/fslab-count-linked-restored.out" || fail T65 "fslab linked free count was not restored"
+pass T65
+
+if ./fslab --blocks 10 --method contiguous --files "alpha:3,alpha:2" >"$TMP/fslab-duplicate.out" 2>&1; then fail T66 "fslab accepted duplicate names"; fi
+grep -q 'invalid file list.*duplicates' "$TMP/fslab-duplicate.out" || fail T66 "fslab duplicate-name error was unclear"
+pass T66
+
+if ./fslab --blocks 10 --method indexed --files "alpha:3" --free missing >"$TMP/fslab-missing.out" 2>&1; then fail T67 "fslab accepted a missing filename"; fi
+grep -q 'file to free was not found' "$TMP/fslab-missing.out" || fail T67 "fslab missing-name error was unclear"
+pass T67
+
 make clean >/dev/null
 pass T8
-printf 'All T1-T60 tests passed.\n'
+printf 'All T1-T67 tests passed.\n'

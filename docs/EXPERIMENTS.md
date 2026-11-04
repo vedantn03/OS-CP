@@ -136,13 +136,15 @@ Contiguous allocation treats the supplied sizes as separate free holes and consu
 
 Contiguous output keys: `mode` names the allocator; `policy` is first, best, or worst fit; `requests` is the number of requests; `allocated` and `failed` count outcomes; `total_free` and `largest_free` report remaining space; `external_fragmentation` is yes when a failed request could fit in total free space but not in any single hole; `fragmented_free` is total free space excluding the largest hole.
 
+For the textbook requests, first fit places 212 KB in the 500 KB hole, 417 KB in the 600 KB hole, and 112 KB in the 288 KB remainder; 426 KB fails. Best fit places the requests in 300, 500, 200, and 600 KB holes, respectively, and all four succeed. Worst fit uses 600, 500, and the 388 KB remainder for the first three requests; 426 KB fails. First and worst fit both end with 959 KB free, a largest hole of 300 KB, and 659 KB fragmented free; best fit ends with 533 KB free, a largest hole of 174 KB, and 359 KB fragmented free.
+
 The buddy allocator requires power-of-two total memory and minimum block size, splits larger blocks to satisfy each request, and rounds allocations up to the next suitable block:
 
 ```console
-./memlab buddy --total 1024 --min-block 32 --requests "100 200 60 500"
+./memlab buddy --total 1024 --min-block 32 --requests "100 240 64 256"
 ```
 
-Buddy output keys: `mode`, `total`, and `min_block` identify the setup; `requests`, `allocated`, and `failed` count request outcomes; `allocated_bytes` is reserved block space; `requested_bytes` is useful payload; `internal_fragmentation` is their difference; `total_free` and `largest_free` describe remaining blocks.
+With these inputs the blocks round to 128, 256, 64, and 256 KB. Output keys: `mode`, `total`, and `min_block` identify the setup; `requests`, `allocated`, and `failed` count outcomes; `allocated_bytes` is reserved block space; `requested_bytes` is useful payload; `internal_fragmentation` is their difference; `total_free` and `largest_free` describe remaining blocks. The current CLI has no free operation, so buddy coalescing cannot be demonstrated or verified through it.
 
 The slab allocator selects the smallest supplied size class that can hold each object and adds slabs as cache slots fill:
 
@@ -150,9 +152,9 @@ The slab allocator selects the smallest supplied size class that can hold each o
 ./memlab slab --page-size 4096 --classes "16 32 64 128 256" --objects "12 24 40 100 200 12"
 ```
 
-Slab output keys: `mode`, `page_size`, and `classes` identify the cache setup; `objects`, `allocated`, and `failed` count inputs and outcomes; `slabs` counts pages assigned to caches; `requested_bytes` is useful payload; `allocated_bytes` is the size-class space occupied by objects; `internal_fragmentation` is class space minus payload; `slab_waste` is all page space committed to slabs but not occupied by object slots. These allocator models are standalone and do not allocate the live simulator's page frames.
+Slab output keys: `mode`, `page_size`, and `classes` identify the cache setup; `objects`, `allocated`, and `failed` count inputs and outcomes; `slabs` counts pages assigned to caches; `requested_bytes` is useful payload; `allocated_bytes` is the size-class space occupied by objects; `internal_fragmentation` is class space minus payload; `slab_waste` is all page space committed to slabs but not occupied by object slots. The current CLI has no free operation or slot identifiers, so reuse and duplicate-live-slot behavior cannot be demonstrated or verified through it. These allocator models are standalone and do not allocate the live simulator's page frames.
 
-## File allocation lab
+## File system lab
 
 Build the standalone directory and block-allocation model:
 
@@ -169,7 +171,7 @@ make fslab
 ./fslab --blocks 10 --method indexed --files "alpha:3,beta:4" --free alpha
 ```
 
-Output keys: `mode` identifies this lab; `method` is the allocation layout; `blocks` is total disk blocks; `files_requested`, `files_allocated`, `files_failed`, and `files_freed` count outcomes; `directory` lists active names, sizes, and first or index blocks; `layout` shows contiguous block lists, linked chains, or indexed data-block lists; `free_blocks` counts available blocks; `bitmap` has one character per block (`1` allocated, `0` free). This is an in-memory teaching model, not a persistent file system or part of the live simulator.
+Output keys: `mode` identifies this lab; `method` is the allocation layout; `blocks` is total disk blocks; `files_requested`, `files_allocated`, `files_failed`, and `files_freed` count outcomes; `directory` lists active names, sizes, and first or index blocks; `layout` shows contiguous block lists, linked chains, or indexed data-block lists; `free_blocks` counts available blocks; `bitmap` has one character per block (`1` allocated, `0` free). For the two-file examples above, contiguous and linked allocate seven of ten blocks and leave 3 free; indexed allocates the seven data blocks plus two index blocks and leaves 1 free. Freeing `alpha` in the indexed example releases its three data blocks and index block, leaving 5 free. A data file of size N reduces free space by N blocks for contiguous and linked methods, and N+1 for indexed allocation. Freeing the file restores those blocks. The current CLI cannot allocate more files after freeing one, so it cannot model a file request against extents fragmented by an earlier free. Duplicate names, missing names in `--free`, and capacity failures return nonzero status. This is an in-memory teaching model, not a persistent file system or part of the live simulator.
 
 ## Reading the results
 

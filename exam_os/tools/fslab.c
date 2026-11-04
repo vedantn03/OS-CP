@@ -195,10 +195,10 @@ static int run(int argc, char **argv) {
     else return 2;
     parsed = parse_files(files_text, files, &file_count);
     if (parsed < 0) { error_message("out of memory"); return 1; }
-    if (parsed == 0) return 2;
+    if (parsed == 0) { error_message("invalid file list (check names, sizes, and duplicates)"); return 2; }
     parsed = parse_free_names(free_text, free_names, &free_count);
     if (parsed < 0) { error_message("out of memory"); return 1; }
-    if (parsed == 0) return 2;
+    if (parsed == 0) { error_message("invalid free list"); return 2; }
     for (i = 0; i < file_count; i++) {
         int success;
         if (method == ALLOC_CONTIGUOUS) success = allocate_contiguous(bitmap, (int)blocks, &files[i]);
@@ -208,7 +208,10 @@ static int run(int argc, char **argv) {
     }
     for (i = 0; i < free_count; i++) {
         int position = find_file(files, file_count, free_names[i]);
-        if (position < 0 || !files[position].active) return 2;
+        if (position < 0 || !files[position].active) {
+            error_message("file to free was not found or was already freed");
+            return 2;
+        }
     }
     for (i = 0; i < free_count; i++) {
         int position = find_file(files, file_count, free_names[i]);
@@ -225,11 +228,20 @@ static int run(int argc, char **argv) {
     printf("free_blocks: %d\nbitmap: ", free_blocks);
     for (i = 0; i < (size_t)blocks; i++) putchar(bitmap[i] ? '1' : '0');
     putchar('\n');
+    if (failed != 0) {
+        error_message("one or more files could not be allocated (capacity or external fragmentation)");
+        return 1;
+    }
     return 0;
 }
 
 int main(int argc, char **argv) {
-    int result = run(argc - 1, argv + 1);
-    if (result == 2) error_message("usage: fslab --blocks N --method contiguous|linked|indexed --files name:size,... [--free name,...]");
+    int result;
+    if (argc == 2 && strcmp(argv[1], "--help") == 0) {
+        puts("usage: fslab --blocks N --method contiguous|linked|indexed --files name:blocks,... [--free name,...]");
+        return 0;
+    }
+    result = run(argc - 1, argv + 1);
+    if (result == 2) error_message("invalid command or option (use --help)");
     return result;
 }
