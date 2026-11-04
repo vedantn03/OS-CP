@@ -16,3 +16,4 @@ exam_os/output/*.json
 *.swp
 *.swo
 *.log
+exam_os/output/*.csv
