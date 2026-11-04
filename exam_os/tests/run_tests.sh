@@ -12,6 +12,7 @@ pass() { printf 'PASS %s\n' "$1"; }
 fail() { printf 'FAIL %s: %s\n' "$1" "$2" >&2; exit 1; }
 
 make clean >/dev/null
+make synclab >/dev/null || fail T41 "synclab build failed"
 make >/dev/null || fail T1 "build failed"
 pass T1
 
@@ -355,6 +356,41 @@ elif [ "$?" -ne 2 ]; then
 fi
 pass T40
 
+counter_mutex=$(./synclab counter --mode mutex --threads 4 --iters 200000 | sed -n 's/^final: //p')
+[ "$counter_mutex" -eq 800000 ] || fail T41 "synclab mutex counter mismatch"
+pass T41
+
+./synclab counter --mode sem --threads 4 --iters 100000 >"$TMP/synclab-sem.out" || fail T42 "synclab semaphore counter failed"
+grep -q '^correct: yes$' "$TMP/synclab-sem.out" || fail T42 "synclab semaphore counter mismatch"
+pass T42
+
+counter_peterson=$(./synclab counter --mode peterson --threads 2 --iters 200000 | sed -n 's/^final: //p')
+[ "$counter_peterson" -eq 400000 ] || fail T43 "synclab Peterson counter mismatch"
+pass T43
+
+counter_peterson=$(./synclab counter --mode peterson --threads 2 --iters 200000 | sed -n 's/^final: //p')
+[ "$counter_peterson" -eq 400000 ] || fail T44 "synclab repeated Peterson counter mismatch"
+pass T44
+
+./synclab rw --policy fair --readers 4 --writers 2 --ops 100 --hold-us 100 >"$TMP/synclab-rw.out" || fail T45 "synclab fair rw failed"
+grep -q '^torn_reads: 0$' "$TMP/synclab-rw.out" && grep -q '^violations: 0$' "$TMP/synclab-rw.out" && grep -q '^reads_done: 400$' "$TMP/synclab-rw.out" && grep -q '^writes_done: 200$' "$TMP/synclab-rw.out" || fail T45 "synclab fair rw counts mismatch"
+pass T45
+
+./synclab phil --mode ordered --n 5 --meals 30 --eat-us 100 >"$TMP/synclab-phil.out" || fail T46 "synclab ordered philosophers failed"
+grep -q '^deadlock: no$' "$TMP/synclab-phil.out" && grep -q '^meals_eaten: 150$' "$TMP/synclab-phil.out" || fail T46 "synclab ordered philosopher result mismatch"
+pass T46
+
+./synclab phil --mode naive --n 5 --timeout-ms 150 >"$TMP/synclab-naive.out" || fail T47 "synclab naive deadlock demo failed"
+grep -q '^deadlock: yes$' "$TMP/synclab-naive.out" || fail T47 "synclab naive deadlock was not detected"
+pass T47
+
+if ./synclab counter --mode peterson --threads 3 --iters 10 >/dev/null 2>&1; then
+    fail T48 "synclab invalid Peterson thread count accepted"
+elif [ "$?" -ne 2 ]; then
+    fail T48 "synclab invalid Peterson exit code mismatch"
+fi
+pass T48
+
 make clean >/dev/null
 pass T8
-printf 'All T1-T40 tests passed.\n'
+printf 'All T1-T48 tests passed.\n'

@@ -25,7 +25,7 @@ $(OUT): $(SRC)
 	$(CC) $(CFLAGS) -o $(OUT) $(SRC) $(LDFLAGS)
 
 clean:
-	rm -f $(OUT) $(OUT)_asan $(OUT)_tsan pagesim disksim deadsim output/*.txt output/*.json
+	rm -f $(OUT) $(OUT)_asan $(OUT)_tsan pagesim disksim deadsim synclab synclab_tsan output/*.txt output/*.json
 
 run: all
 	./$(OUT)
@@ -55,6 +55,8 @@ help:
 	@echo "make pagesim   Build the offline page replacement simulator"
 	@echo "make disksim   Build the offline disk scheduling simulator"
 	@echo "make deadsim    Build the offline deadlock safety simulator"
+	@echo "make synclab    Build the standalone synchronization lab"
+	@echo "make synclab_tsan Build synclab with ThreadSanitizer"
 
 pagesim:
 	$(CC) -std=c11 -D_DEFAULT_SOURCE -Wall -Wextra -Wpedantic -o pagesim tools/pagesim.c
@@ -65,7 +67,13 @@ disksim:
 deadsim:
 	$(CC) -std=c11 -D_DEFAULT_SOURCE -Wall -Wextra -Wpedantic -o deadsim tools/deadsim.c
 
-.PHONY: all clean run demo headless test compare gantt help pagesim disksim deadsim
+synclab:
+	$(CC) -std=c11 -D_DEFAULT_SOURCE -Wall -Wextra -Wpedantic -pthread -o synclab tools/synclab.c
+
+synclab_tsan:
+	$(CC) -std=c11 -D_DEFAULT_SOURCE -Wall -Wextra -Wpedantic -pthread -fsanitize=thread -g -O1 -fno-omit-frame-pointer -o synclab_tsan tools/synclab.c
+
+.PHONY: all clean run demo headless test compare gantt help pagesim disksim deadsim synclab synclab_tsan
 tsan: exam_os_tsan
 
 exam_os_tsan: $(SRC)

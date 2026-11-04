@@ -76,6 +76,48 @@ bash scripts/deadlock_demo.sh --out /tmp/deadlock
 
 The checked-in report is [docs/results/deadlock.md](results/deadlock.md).
 
+## Synchronization lab
+
+Build the independent C11 and pthreads lab from `exam_os`:
+
+```console
+make synclab
+```
+
+Counter modes share one volatile counter. `none` is the intentionally unsafe baseline, `mutex` locks each increment with a pthread mutex, `sem` uses a binary POSIX semaphore, and `peterson` uses Peterson's two-process algorithm:
+
+```console
+./synclab counter --mode none --threads 4 --iters 1000000
+./synclab counter --mode mutex --threads 4 --iters 200000
+./synclab counter --mode sem --threads 4 --iters 200000
+./synclab counter --mode peterson --threads 2 --iters 200000
+```
+
+Counter output keys: `mode` names the synchronization mode; `threads` and `iters` are the inputs; `expected` is threads multiplied by iterations; `final` is the observed counter; `correct` says whether final equals expected; `lost_updates` is expected minus final.
+
+The readers-writers lab supports `none` (unsafe control), `reader` (readers-preference), `writer` (writers-preference), and `fair` (a turnstile shared by readers and writers):
+
+```console
+./synclab rw --policy none --readers 4 --writers 2 --ops 100 --hold-us 100
+./synclab rw --policy reader --readers 4 --writers 2 --ops 100 --hold-us 100
+./synclab rw --policy writer --readers 4 --writers 2 --ops 100 --hold-us 100
+./synclab rw --policy fair --readers 4 --writers 2 --ops 100 --hold-us 100
+```
+
+Readers-writers output keys: `policy` is the selected policy; `readers` and `writers` are thread counts; `ops` is each thread's operation count; `reads_done` and `writes_done` are completed operations; `torn_reads` counts reads whose two values differed; `violations` counts observed overlapping reader/writer or writer/writer critical sections; `max_readers` and `max_writers` are the maximum simultaneous counts observed. The three synchronized policies should report zero torn reads and violations.
+
+Dining philosophers can demonstrate a deterministic timeout-detected deadlock with `naive`, resource hierarchy with `ordered`, and an N-1 permit waiter with `waiter`:
+
+```console
+./synclab phil --mode naive --n 5 --timeout-ms 150
+./synclab phil --mode ordered --n 5 --meals 30 --eat-us 100
+./synclab phil --mode waiter --n 5 --meals 30 --eat-us 100
+```
+
+Philosopher output keys: `mode` is the strategy; `philosophers` is N; `meals` is the requested meal count per philosopher; `deadlock` is yes when a timed fork wait got stuck; `stuck` counts those philosophers; `meals_eaten` is the total completed meals; `violations` counts attempts to own an already-owned fork. The naive mode intentionally eats no meals; ordered and waiter modes should finish every meal without violations.
+
+The unsynchronized counter and the `none` readers-writers control may show lost updates, torn reads, or violations only probabilistically on a multicore machine. A run that happens not to expose a race does not make the unsafe control synchronized. The lab is standalone and does not change the live simulator's locking.
+
 ## Reading the results
 
 Live result files describe a particular configuration and seed set; they are not guaranteed values for another machine or run. Read each report’s workload, policy, and seed description before comparing its rows. The live experiments produce CSV and Markdown output beneath the selected directory.

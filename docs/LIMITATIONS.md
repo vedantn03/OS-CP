@@ -2,7 +2,7 @@
 
 ## Not implemented
 
-The simulator does not implement Peterson’s solution, readers-writers synchronization, a file system, slab allocation, buddy allocation, segmentation, a system call interface, Android architecture, fork/exec, swapping, or contiguous-allocation fragmentation. Deadlock handling exists only in the standalone `deadsim` tool; it is not part of the live simulation. The project does not model kernel/user address spaces or booting a kernel.
+Peterson’s solution, readers-writers synchronization, and dining philosophers exist only in the standalone `synclab` lab; they are not integrated into the live simulation. The live simulation still has no readers-writers locking or Peterson locking; its synchronization uses mutexes and semaphores for its existing shared structures. The simulator also does not implement a file system, slab allocation, buddy allocation, segmentation, a system call interface, Android architecture, fork/exec, swapping, or contiguous-allocation fragmentation. Deadlock handling exists only in the standalone `deadsim` tool; it is not part of the live simulation. The project does not model kernel/user address spaces or booting a kernel.
 
 ## Modelling simplifications
 

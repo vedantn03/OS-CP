@@ -34,9 +34,9 @@ Legend: IMPLEMENTED (in the live simulator and tested), LAB (a standalone tool i
 | Critical section and mutual exclusion (mutexes) | IMPLEMENTED | exam_os/src/main.c::state_init initializes shared-state synchronization. | make test |
 | Semaphores | IMPLEMENTED | exam_os/src/io_buffer.c::io_buffer_init initializes empty and filled counts. | make test T3, T39 |
 | Producer-consumer (bounded buffer) | IMPLEMENTED | exam_os/src/io_buffer.c::io_buffer_submit and exam_os/src/io_buffer.c::flush_buffer | make test T39 |
-| Peterson's solution | NOT IMPLEMENTED | No two-process software mutual-exclusion algorithm is present in the source. | No implementation |
-| Readers-writers and dining philosophers | NOT IMPLEMENTED | The repository contains no readers-writers or dining-philosophers simulation. | No implementation |
-| Deadlock prevention | NOT IMPLEMENTED | No live resource-allocation prevention policy is implemented. | No implementation |
+| Peterson's solution | LAB | Standalone lab entry and exit: exam_os/tools/synclab.c::peterson_enter and exam_os/tools/synclab.c::peterson_exit. | `./synclab counter --mode peterson --threads 2 --iters 200000` |
+| Readers-writers and dining philosophers | LAB | Standalone reader and writer policies: exam_os/tools/synclab.c::rw_read_lock and exam_os/tools/synclab.c::rw_write_lock. | `./synclab rw --policy fair --readers 4 --writers 2 --ops 100 --hold-us 100` |
+| Deadlock prevention | PARTIAL | The ordered philosopher policy attacks only circular wait through resource ordering: exam_os/tools/synclab.c::ordered_philosopher_worker. Mutual exclusion, hold and wait, and no preemption are not attacked. | `./synclab phil --mode ordered --n 5 --meals 30 --eat-us 100` |
 | Deadlock avoidance (Banker's algorithm) | LAB | exam_os/tools/deadsim.c::safe_sequence | ./deadsim safe --file scenarios/banker_textbook.txt |
 | Deadlock detection and recovery | LAB | exam_os/tools/deadsim.c::detect and exam_os/tools/deadsim.c::main | ./deadsim recover --file scenarios/detect_textbook_deadlock.txt --policy min-alloc |
 | Deadlock handling inside the live simulation | NOT IMPLEMENTED | The live scheduler has no resource-allocation deadlock detector or recovery routine. | No live deadlock handler |

@@ -45,14 +45,16 @@ One line per source, header, tool, scenario, script, and test entry point curren
 - `exam_os/tools/deadsim.c` — standalone Banker's safety/request, detection, recovery, and wait-for graph tool.
 - `exam_os/tools/disksim.c` — standalone disk scheduling command-line tool.
 - `exam_os/tools/pagesim.c` — standalone FIFO, LRU, CLOCK, and OPT page reference tool.
+- `exam_os/tools/synclab.c` — standalone counter, readers-writers, and dining-philosophers synchronization lab.
 - `exam_os/scripts/baseline.sh` — baseline workload runner and report writer.
 - `exam_os/scripts/compare.sh` — multi-seed scheduler comparison runner.
 - `exam_os/scripts/deadlock_demo.sh` — deadlock lab walkthrough generator.
 - `exam_os/scripts/diskcompare.sh` — live disk request capture and policy replay comparison.
 - `exam_os/scripts/gantt.sh` — ASCII chart generator for scheduler trace CSV.
 - `exam_os/scripts/pagecurve.sh` — multi-seed live page-fault/frame comparison.
-- `exam_os/tests/run_tests.sh` — numbered regression suite T1 through T40.
+- `exam_os/tests/run_tests.sh` — numbered regression suite T1 through T48.
 - `exam_os/tests/gate61.sh` — documentation gate and demonstration command runner.
+- `exam_os/tests/gate71.sh` — standalone synchronization lab and documentation gate.
 - `exam_os/tests/gate_all.sh` — currently an empty placeholder.
 
 ## Data ownership
@@ -120,7 +122,7 @@ The parser rejects unknown or incomplete command-line arguments. Some integer va
 
 ## Tests
 
-The test runner names the tests T1 through T40; T8 is its final cleanup check and runs after T40.
+The test runner names the tests T1 through T48; T8 is its final cleanup check and runs after T48.
 
 - T1 builds the application.
 - T2 checks that the executable exists.
@@ -162,6 +164,13 @@ The test runner names the tests T1 through T40; T8 is its final cleanup check an
 - T38 checks disksim movement values and invalid inputs.
 - T39 checks each live disk policy and disk tracing.
 - T40 checks deadsim safety, requests, detection, recovery, graph cycles, and usage errors.
+- T41 checks synclab mutex counter mutual exclusion.
+- T42 checks synclab semaphore counter mutual exclusion.
+- T43 and T44 repeat the synclab Peterson counter check.
+- T45 checks fair synclab readers-writers counts and critical-section safety.
+- T46 checks ordered synclab philosophers finish all meals.
+- T47 checks the naive synclab philosophers demonstrate deadlock.
+- T48 checks invalid Peterson thread-count handling in synclab.
 
 ## Invariants
 
@@ -191,6 +200,7 @@ The test runner names the tests T1 through T40; T8 is its final cleanup check an
 - `exam_os/tests/gate41b.sh` — live disk integration acceptance gate.
 - `exam_os/tests/gate51.sh` — standalone deadlock lab acceptance gate.
 - `exam_os/tests/gate61.sh` — documentation truth and demo command gate.
+- `exam_os/tests/gate71.sh` — synchronization lab source, behavior, race, and documentation checks.
 - `exam_os/tests/gate_all.sh` — currently empty; it does not run the other gates.
 
 The gate scripts should be run from the `exam_os` directory. Some gates require generated executables and a clean working tree; read each script’s checks before interpreting its result.
@@ -205,6 +215,7 @@ The gate scripts should be run from the `exam_os` directory. Some gates require 
 - 4.1b: live disk, trace replay, diskcompare.
 - 5.1: deadsim, scenarios and demo.
 - 6.1: documentation set.
+- 7.1: synclab.
 - 2026-11-02: Completed memory race protection, configurable tick timing, interactive workload WAITING transitions, test restoration, and sanitizer validation for phases 1.5–2.2.
 - 2026-11-03: Added deterministic per-thread RNG streams and shared simulation clock sleep/notification infrastructure.
 - 2026-11-03: Made scheduler CPU accounting tick-driven with utilization, invariants, and optional dispatch tracing.

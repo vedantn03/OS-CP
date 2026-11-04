@@ -70,7 +70,7 @@ $ bash scripts/diskcompare.sh --seeds "1 2" --out /tmp/disk
 
 For the textbook queue, expected movements are FIFO 640, LIFO 609, SSTF 236, SCAN up-first 331, and C-SCAN up 382.
 
-### 6:30–10:30 — Deadlock lab
+### 6:30–10:30 — Deadlock and synchronization labs
 
 Say: “`deadsim` is a standalone lab using exam-server resources. It demonstrates Banker’s safety and request algorithms, detection, abort-based recovery, and wait-for-graph cycles; these mechanisms are not in the live threaded simulation.”
 
@@ -88,7 +88,9 @@ $ bash scripts/deadlock_demo.sh --out /tmp/deadlock
 
 The textbook safe sequence is `1 3 0 2 4`; the P1 request is granted. Detection identifies processes 1, 2, 3, and 4 as deadlocked in the supplied deadlock state, and min-alloc aborts process 1. The script also compares recovery policies, textbook detection states, exam scenarios, and a wait-for chain.
 
-The four necessary conditions are mutual exclusion, hold and wait, no preemption, and circular wait. Banker’s avoidance prevents unsafe states. Detection followed by process abortion breaks circular wait after the fact; the lab does not implement the other prevention strategies.
+The four necessary conditions are mutual exclusion, hold and wait, no preemption, and circular wait. Banker’s avoidance prevents unsafe states. Detection followed by process abortion breaks a cycle after the fact. `deadsim` does not implement the other prevention strategies; `synclab` separately demonstrates resource ordering, which attacks only circular wait.
+
+The standalone synchronization lab is separate from the live simulator. Build it with `make synclab` and show Peterson mutual exclusion with `./synclab counter --mode peterson --threads 2 --iters 200000`, fair readers-writers locking with `./synclab rw --policy fair --readers 4 --writers 2 --ops 100 --hold-us 100`, and resource ordering with `./synclab phil --mode ordered --n 5 --meals 30 --eat-us 100`.
 
 ### 10:30–12:00 — Wrap-up
 

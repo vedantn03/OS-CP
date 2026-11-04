@@ -6,7 +6,7 @@ Exam OS is a C userspace simulation of an exam server. Student sessions compete 
 
 It is not a kernel. It does not control real memory, processes, disks, or hardware interrupts. The live program runs as a POSIX process using threads, mutexes, semaphores, and an ncurses dashboard.
 
-The live simulator includes multiple CPU scheduling policies, process states, demand paging, FIFO/LRU/CLOCK replacement, a bounded I/O buffer, simulated disk scheduling, timeout and overload events, logging, and invariant checks. Separate tools cover offline page replacement, disk scheduling, and deadlock algorithms.
+The live simulator includes multiple CPU scheduling policies, process states, demand paging, FIFO/LRU/CLOCK replacement, a bounded I/O buffer, simulated disk scheduling, timeout and overload events, logging, and invariant checks. Separate tools cover offline page replacement, disk scheduling, deadlock algorithms, and synchronization exercises.
 
 ## Quick start
 
@@ -50,6 +50,8 @@ make pagesim disksim deadsim
 ./pagesim --algo FIFO --frames 3 --string "1 2 3 1 2 4"
 ./disksim --algo SSTF --head 20 --cylinders 200 --string "10 90 30"
 ./deadsim safe --file scenarios/banker_textbook.txt
+make synclab
+./synclab counter --mode mutex --threads 4 --iters 200000
 ```
 
 ## What you can demonstrate
@@ -60,6 +62,7 @@ make pagesim disksim deadsim
 | `pagesim` | Offline FIFO, LRU, CLOCK, and OPT reference-string simulation. |
 | `disksim` | Offline FIFO, LIFO, SSTF, SCAN, and C-SCAN movement and request ordering. |
 | `deadsim` | Standalone Banker safety and requests, detection, abort recovery, and wait-for graph cycles. |
+| `synclab` | Standalone counter synchronization, readers-writers policies, and dining philosophers. |
 | `scripts/compare.sh` | Average live scheduler metrics across selected seeds. |
 | `scripts/pagecurve.sh` | Compare live page-fault rates across frame counts and policies. |
 | `scripts/diskcompare.sh` | Replay recorded disk requests under five policies. |

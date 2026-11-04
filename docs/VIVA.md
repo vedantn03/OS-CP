@@ -21,7 +21,7 @@
 **A:** `tests/run_tests.sh` builds the application and exercises configuration, scheduling, paging, disk, and standalone-tool behavior from T1 through T40. The gate scripts add source checks and textbook examples; `tests/gate61.sh` checks documentation and runs its listed demo commands. The present `tests/gate_all.sh` is empty and does not orchestrate the gates.
 
 ### Q7. What is not implemented, and why?
-**A:** This project focuses on selected operating-system concepts that fit a deterministic or bounded classroom simulation. It omits a real file system, system calls, fork/exec, swapping, Android internals, and several synchronization exercises. `exam_os/tools/deadsim.c::main` provides deadlock algorithms only as a separate lab.
+**A:** This project focuses on selected operating-system concepts that fit a deterministic or bounded classroom simulation. A real file system, system calls, fork/exec, swapping, Android internals, and deadlock handling inside the live simulation remain out of scope. The standalone `synclab` demonstrates Peterson with `./synclab counter --mode peterson --threads 2 --iters 200000`, readers-writers with `./synclab rw --policy fair --readers 4 --writers 2 --ops 100 --hold-us 100`, and dining philosophers with `./synclab phil --mode ordered --n 5 --meals 30 --eat-us 100`. `exam_os/tools/deadsim.c::main` provides resource-allocation deadlock algorithms as a separate lab.
 
 ## Unit 1: Operating Systems Overview
 
@@ -90,13 +90,13 @@
 **A:** It can abort the currently deadlocked process with the smallest allocation total, largest total, lowest index, or highest index. `exam_os/tools/deadsim.c::main` returns the victim’s allocation to Available, clears its allocation and request, then runs detection again.
 
 ### Q28. What are the four necessary conditions for deadlock?
-**A:** They are mutual exclusion, hold and wait, no preemption, and circular wait. `exam_os/tools/deadsim.c::detect` identifies an unresolved wait state; the standalone recovery command breaks a cycle by aborting a process and releasing its resources. Banker avoidance prevents unsafe states before a deadlock develops.
+**A:** They are mutual exclusion, hold and wait, no preemption, and circular wait. `exam_os/tools/deadsim.c::detect` identifies an unresolved wait state; the standalone recovery command breaks a cycle by aborting a process and releasing its resources. Banker avoidance prevents unsafe states before a deadlock develops. In `synclab`, ordered forks attack only circular wait; demonstrate that with `./synclab phil --mode ordered --n 5 --meals 30 --eat-us 100`.
 
 ### Q29. Why is deadsim separate from the live simulation?
 **A:** The tool operates on a text state file and fixed arrays, without connecting to the simulator’s process table or resource locks. `exam_os/tools/deadsim.c::read_state` parses the state independently, and its `main` dispatches the selected lab command. The live simulator has no resource-allocation deadlock handler.
 
 ### Q30. What is Peterson’s solution, and is it implemented?
-**A:** Peterson’s two-process algorithm uses intent flags and a turn variable to enforce mutual exclusion under its assumptions. It is not implemented in this repository; the source has no Peterson routine. The syllabus map marks it as not implemented rather than implying the lab demonstrates it.
+**A:** Peterson’s two-process algorithm uses intent flags and a turn variable to enforce mutual exclusion under its assumptions. The standalone synchronization lab implements it with `exam_os/tools/synclab.c::peterson_enter` and `exam_os/tools/synclab.c::peterson_exit`; run `./synclab counter --mode peterson --threads 2 --iters 200000`. It is not integrated into the live simulation.
 
 ## Unit 4: Memory Management
 

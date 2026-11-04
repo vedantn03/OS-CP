@@ -6,6 +6,8 @@ Exam OS is one C process containing concurrent subsystem threads. The shared `Sy
 
 `main` loads built-in defaults, reads `config.conf`, applies command-line options, validates configuration, initializes modules, starts threads, waits for an end condition, joins threads, and writes reports. The dashboard is optional and is omitted in headless mode. See `exam_os/src/main.c::main` and `exam_os/src/config.c::config_validate`.
 
+The standalone `exam_os/tools/synclab.c` program demonstrates counter races and mutual exclusion, readers-writers policies, and dining-philosopher deadlock strategies. It has its own `main` and does not participate in the live simulator's thread or lock graph.
+
 ```mermaid
 flowchart LR
     Main[main thread] --> State[(SystemState)]
